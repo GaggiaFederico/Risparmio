@@ -161,7 +161,7 @@
   // ---------- Stato dello schermo ----------
   const ID_VALIDO = /^[\w.-]+\.apps\.googleusercontent\.com$/;
   // fase: config (manca il Client ID) · accesso · carico · errore · pronto
-  const S = { fase: 'accesso', clientId: '', test: [], ultimi: {}, vista: null, umorePrec: undefined, tab: 'posso', prezzo: '', catId: null, verdetto: null, stipendioArr: '', extraImp: '', nuovaCat: '', pendente: null, ridisegna: false };
+  const S = { meseMov: 0, filtroMov: 'tutti', selezione: null, fase: 'accesso', clientId: '', test: [], ultimi: {}, vista: null, umorePrec: undefined, tab: 'posso', prezzo: '', catId: null, verdetto: null, stipendioArr: '', extraImp: '', nuovaCat: '', pendente: null, ridisegna: false };
   const $ = (q) => document.querySelector(q);
 
   // ---------- Icone ----------
@@ -257,8 +257,7 @@
     const massimo = Math.max(1, ...perCat.map(([, t]) => t), senzaCat);
     const sig = D.categorie.find((c) => c.nome.trim().toLowerCase() === 'sigarette');
     const sigMese = sig ? C.totCategoria(sig.id) : 0;
-    const ultime = C.speseMese().slice().sort((a, b) => b.data - a.data).slice(0, 40);
-    const giorno = new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short' });
+    const ultime = C.speseMese().concat(D.extra.filter((e) => stessoMese(e.data)));
 
     return `${testata(mese, 'Riepilogo')}
       <section class="vetro" aria-labelledby="t-stip">
@@ -299,15 +298,74 @@
         </div>
       </section>
 
-      <section class="vetro" aria-labelledby="t-ultime">
-        <h2 id="t-ultime">Spese del mese</h2>
-        ${ultime.length ? `<ul class="lista">${ultime.map((s) => {
-          const c = C.cat(s.categoriaID);
-          const dett = [giorno.format(new Date(s.data)), s.nota].filter(Boolean).map(esc).join(' · ');
-          return `<li class="voce-lista"><div class="colonna"><span class="principale">${esc(c ? c.nome : 'Senza categoria')}</span><span class="secondaria">${dett}</span></div>
-            <strong>${eur(s.importo)}</strong>
-            <button type="button" class="x" data-act="elimina-spesa" data-id="${s.id}" aria-label="Elimina spesa di ${eur(s.importo)}">${ICONA.x}</button></li>`;
-        }).join('')}</ul>` : '<p class="nota">Qui compaiono le spese che registri.</p>'}
+      <button type="button" class="vetro vai-movimenti" data-act="tab" data-id="movimenti">
+        <span class="colonna"><span class="principale">Movimenti del mese</span><span class="nota">${ultime.length} ${ultime.length === 1 ? 'movimento' : 'movimenti'} · vedi e cancella</span></span>
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      </button>`;
+  }
+
+  // ---------- Movimenti: elenco per mese, con cancellazione ----------
+  function movimentiDelMese(offset) {
+    const n = new Date();
+    const rif = new Date(n.getFullYear(), n.getMonth() - offset, 1);
+    const nelMese = (t) => { const d = new Date(t); return d.getFullYear() === rif.getFullYear() && d.getMonth() === rif.getMonth(); };
+    const spese = D.spese.filter((s) => nelMese(s.data)).map((s) => {
+      const c = C.cat(s.categoriaID);
+      return { id: s.id, tipo: 'spesa', data: s.data, importo: s.importo, titolo: c ? c.nome : 'Senza categoria', nota: s.nota || '' };
+    });
+    const extra = D.extra.filter((e) => nelMese(e.data)).map((e) => ({ id: e.id, tipo: 'entrata', data: e.data, importo: e.importo, titolo: e.nome, nota: 'Mensilità extra' }));
+    return { rif, voci: spese.concat(extra).sort((a, b) => b.data - a.data) };
+  }
+
+  function viewMovimenti() {
+    const { rif, voci: tutte } = movimentiDelMese(S.meseMov);
+    const voci = tutte.filter((v) => S.filtroMov === 'tutti' || (S.filtroMov === 'spese' ? v.tipo === 'spesa' : v.tipo === 'entrata'));
+    const nomeMese = maiuscola(new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(rif));
+    const uscite = tutte.filter((v) => v.tipo === 'spesa').reduce((a, v) => a + v.importo, 0);
+    const entrate = tutte.filter((v) => v.tipo === 'entrata').reduce((a, v) => a + v.importo, 0);
+    const sel = S.selezione;
+    const nSel = sel ? voci.filter((v) => sel.has(v.id)).length : 0;
+    const fGiorno = new Intl.DateTimeFormat('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+    const gruppi = [];
+    voci.forEach((v) => {
+      const k = new Date(v.data).toDateString();
+      const g = gruppi[gruppi.length - 1];
+      if (g && g.k === k) g.voci.push(v); else gruppi.push({ k, titolo: maiuscola(fGiorno.format(new Date(v.data))), voci: [v] });
+    });
+    const filtro = (id, nome) => `<button type="button" class="pillola" data-act="filtro-mov" data-id="${id}" aria-pressed="${S.filtroMov === id}">${nome}</button>`;
+
+    return `${testata('Spese ed entrate', 'Movimenti')}
+      <section class="vetro" aria-label="Mese">
+        <div class="mesi">
+          <button type="button" class="x" data-act="mese-prec" aria-label="Mese precedente"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+          <h2 aria-live="polite">${nomeMese}</h2>
+          <button type="button" class="x" data-act="mese-succ" aria-label="Mese successivo"${S.meseMov === 0 ? ' disabled' : ''}><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+        </div>
+        <div class="griglia2">
+          <div class="mini"><span>Uscite</span><strong data-conta="mov-uscite" data-valore="${uscite}">${eur(uscite)}</strong></div>
+          <div class="mini"><span>Entrate extra</span><strong style="color: var(--verde)" data-conta="mov-entrate" data-valore="${entrate}">${eur(entrate)}</strong></div>
+        </div>
+      </section>
+
+      <section class="vetro" aria-labelledby="t-mov">
+        <div class="riga-titolo">
+          <h2 id="t-mov">${voci.length} ${voci.length === 1 ? 'movimento' : 'movimenti'}</h2>
+          ${voci.length ? `<button type="button" class="link" data-act="seleziona">${sel ? 'Fine' : 'Seleziona'}</button>` : ''}
+        </div>
+        <div class="pillole" role="group" aria-label="Mostra">${filtro('tutti', 'Tutti')}${filtro('spese', 'Spese')}${filtro('entrate', 'Entrate extra')}</div>
+        ${sel && voci.length ? `<div class="barra-selezione">
+          <button type="button" class="link" data-act="seleziona-tutti">${nSel === voci.length ? 'Deseleziona tutti' : 'Seleziona tutti'}</button>
+          <button type="button" class="btn-pericolo" data-act="elimina-selezionati" data-pulsante="selezionati"${nSel ? '' : ' disabled'}>Elimina <span data-conta-sel>${nSel}</span></button>
+        </div>` : ''}
+        ${voci.length ? gruppi.map((g) => `<div class="giorno">
+          <h3 class="giorno-titolo">${esc(g.titolo)}</h3>
+          <ul class="lista">${g.voci.map((v) => `<li class="voce-lista${sel && sel.has(v.id) ? ' scelta' : ''}">
+            ${sel ? `<input type="checkbox" class="spunta" data-campo="sel" data-id="${v.id}"${sel.has(v.id) ? ' checked' : ''} aria-label="Seleziona ${esc(v.titolo)} ${eur(v.importo)}">` : ''}
+            <div class="colonna"><span class="principale">${esc(v.titolo)}</span>${v.nota ? `<span class="secondaria">${esc(v.nota)}</span>` : ''}</div>
+            <strong class="${v.tipo === 'entrata' ? 'positivo' : ''}">${v.tipo === 'entrata' ? '+' : '−'}${eur(v.importo)}</strong>
+            ${sel ? '' : `<button type="button" class="x" data-act="elimina-mov" data-id="${v.id}" data-tipo="${v.tipo}" aria-label="Elimina ${esc(v.titolo)} di ${eur(v.importo)}">${ICONA.x}</button>`}
+          </li>`).join('')}</ul>
+        </div>`).join('') : `<p class="nota">${tutte.length ? 'Nessun movimento di questo tipo.' : 'Nessun movimento in questo mese.'}</p>`}
       </section>`;
   }
 
@@ -435,8 +493,9 @@
     app.classList.remove('entrata');
     if (entrata) { void app.offsetWidth; app.classList.add('entrata'); }
     if (!pronto) { app.innerHTML = viewIngresso(); return; }
-    tabbar.style.setProperty('--i', String(['posso', 'riepilogo', 'impostazioni'].indexOf(S.tab)));
-    app.innerHTML = S.tab === 'riepilogo' ? viewRiepilogo() : S.tab === 'impostazioni' ? viewImpostazioni() : viewPosso();
+    tabbar.style.setProperty('--i', String(['posso', 'riepilogo', 'movimenti', 'impostazioni'].indexOf(S.tab)));
+    app.innerHTML = S.tab === 'riepilogo' ? viewRiepilogo() : S.tab === 'movimenti' ? viewMovimenti()
+      : S.tab === 'impostazioni' ? viewImpostazioni() : viewPosso();
     animaNumeri(entrata);
     document.querySelectorAll('.tabbar [data-act="tab"]').forEach((b) => {
       if (b.dataset.id === S.tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
@@ -542,6 +601,36 @@
       S.prezzo = ''; S.verdetto = null;
       salva(); render();
       toast(`Registrati ${eur(imp)} in ${c.nome}`);
+    },
+    'mese-prec'() { S.meseMov++; S.selezione = null; render(); },
+    'mese-succ'() { if (S.meseMov > 0) { S.meseMov--; S.selezione = null; render(); } },
+    'filtro-mov'(el, id) { S.filtroMov = id; if (S.selezione) S.selezione.clear(); render(); },
+    seleziona() { S.selezione = S.selezione ? null : new Set(); render(); },
+    'seleziona-tutti'() {
+      const { voci } = movimentiDelMese(S.meseMov);
+      const visibili = voci.filter((v) => S.filtroMov === 'tutti' || (S.filtroMov === 'spese' ? v.tipo === 'spesa' : v.tipo === 'entrata'));
+      const tutti = visibili.every((v) => S.selezione.has(v.id));
+      visibili.forEach((v) => { if (tutti) S.selezione.delete(v.id); else S.selezione.add(v.id); });
+      render();
+    },
+    'elimina-mov'(el, id) {
+      const spesa = D.spese.find((s) => s.id === id);
+      const extra = D.extra.find((e) => e.id === id);
+      const v = spesa || extra;
+      if (!v) return;
+      const nome = spesa ? (C.cat(spesa.categoriaID) || { nome: 'spesa' }).nome : extra.nome;
+      if (!confirm(`Eliminare ${nome} di ${eur(v.importo)}?`)) return;
+      eliminaMovimenti([id]);
+      toast(`Eliminato: ${nome} ${eur(v.importo)}`);
+    },
+    'elimina-selezionati'() {
+      const ids = [...(S.selezione || [])];
+      if (!ids.length) return;
+      if (!confirm(`Eliminare ${ids.length} ${ids.length === 1 ? 'movimento' : 'movimenti'}? Non si può annullare.`)) return;
+      eliminaMovimenti(ids);
+      S.selezione = null;
+      render();
+      toast(`${ids.length} ${ids.length === 1 ? 'movimento eliminato' : 'movimenti eliminati'}`);
     },
     'elimina-spesa'(el, id) {
       if (!confirm('Eliminare questa spesa?')) return;
@@ -668,6 +757,16 @@
 
   // Mentre scrivi: niente ridisegno, si aggiornano solo i bottoni.
   function abilita(nome, si) { document.querySelectorAll(`[data-pulsante="${nome}"]`).forEach((b) => { b.disabled = !si; }); }
+  // Cancella spese o mensilità extra, anche su Drive e sugli altri dispositivi.
+  function eliminaMovimenti(ids) {
+    const via = new Set(ids);
+    D.spese = D.spese.filter((s) => !via.has(s.id));
+    D.extra = D.extra.filter((e) => !via.has(e.id));
+    ids.forEach((id) => D.eliminati.push(id));
+    salva();
+    render();
+  }
+
   const mentreScrivi = {
     clientId(el) { S.clientId = el.value; abilita('clientId', ID_VALIDO.test(el.value.trim())); },
     prezzo(el) {
@@ -681,6 +780,14 @@
   };
   // A campo confermato: si salva.
   const aFineCampo = {
+    sel(el) {
+      if (!S.selezione) return;
+      if (el.checked) S.selezione.add(el.dataset.id); else S.selezione.delete(el.dataset.id);
+      const li = el.closest('.voce-lista'); if (li) li.classList.toggle('scelta', el.checked);
+      const n = S.selezione.size;
+      document.querySelectorAll('[data-conta-sel]').forEach((x) => { x.textContent = n; });
+      abilita('selezionati', n > 0);
+    },
     stipendio(el) { const v = parseEuro(el.value); D.stipendio = v > 0 ? v : 0; el.value = numero(D.stipendio); salva(); },
     speseFisse(el) { const v = parseEuro(el.value); D.speseFisse = v > 0 ? v : 0; el.value = numero(D.speseFisse); salva(); },
     pac(el) { const v = parseEuro(el.value); D.pac = v > 0 ? v : 0; el.value = numero(D.pac); salva(); },
@@ -703,7 +810,7 @@
 
   // Le azioni che cambiano i dati partono solo con l'accesso a Google valido,
   // così ogni modifica arriva davvero su Drive.
-  const MODIFICANO = new Set(['registra', 'elimina-spesa', 'stipendio', 'extra', 'elimina-extra', 'essenziale', 'elimina-cat', 'aggiungi-cat', 'pendente-cat',
+  const MODIFICANO = new Set(['registra', 'elimina-spesa', 'elimina-mov', 'elimina-selezionati', 'stipendio', 'extra', 'elimina-extra', 'essenziale', 'elimina-cat', 'aggiungi-cat', 'pendente-cat',
     'stipendio-campo', 'speseFisse', 'pac', 'limite', 'importa']);
   function puoModificare() {
     if (S.fase !== 'pronto') return false;

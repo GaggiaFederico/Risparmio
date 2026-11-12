@@ -1,6 +1,6 @@
 // Fa funzionare Risparmio anche senza rete.
 // Quando cambi i file sul sito, aumenta il numero di VERSIONE.
-const VERSIONE = 'risparmio-v3';
+const VERSIONE = 'risparmio-v4';
 const FILE = [
   './', './index.html', './style.css', './app.js', './config.js', './manifest.webmanifest',
   './font/nunito.woff2',

@@ -9,6 +9,7 @@ Web app per iPhone che ti dice se puoi permetterti una spesa e ti aiuta a rispar
 - **Categorie essenziali e non:** benzina e spesa sono sempre approvate; per gli sfizi controlla budget, ritmo di spesa e limiti.
 - **Mascotte:** un husky in smoking se risparmi, normale se sei nella media, trasandato se esageri.
 - **Riepilogo:** dove va lo stipendio, spese per categoria, sigarette in un anno, piano di accumulo.
+- **Movimenti:** tutte le spese e le mensilità extra mese per mese, divise per giorno. Le cancelli una alla volta o ne selezioni diverse insieme.
 - **Stipendio, PAC, 13ª e 14ª:** registri quando arrivano e il versato del PAC cresce da solo.
 - **Solo Google Drive:** i dati stanno esclusivamente nel file `risparmio-dati.json` sul tuo Drive, mai sul telefono. Ogni modifica viene salvata subito.
 - **Test di collegamento:** all'accesso, e quando vuoi da Impostazioni, controlla passo per passo Google, Drive, il file, la lettura e il salvataggio.
