@@ -1,7 +1,8 @@
 'use strict';
 /* Risparmio: ti dice se puoi permetterti una spesa.
-   I dati restano sempre sul telefono e, se colleghi Google Drive,
-   vengono salvati anche nel file "risparmio-dati.json" sul tuo Drive. */
+   I dati stanno SOLO sul tuo Google Drive, nel file "risparmio-dati.json".
+   Sul telefono resta solo l'accesso a Google (valido un'ora), mai i dati:
+   ogni modifica viene salvata subito su Drive. */
 (function () {
   const CFG = window.RISPARMIO_CONFIG || {};
   const K = {
@@ -43,13 +44,17 @@
     return o;
   }
 
-  let D = (() => {
-    try { const s = leggi(K.dati); if (s) return normalizza(JSON.parse(s)); } catch (e) { /* dati rovinati */ }
-    return nuoviDati();
-  })();
+  // I dati arrivano da Drive dopo l'accesso: prima di allora l'app non mostra nulla.
+  let D = null;
 
-  function scriviLocale() { scrivi(K.dati, JSON.stringify(D)); }
-  function salva() { D.aggiornato = Date.now(); scriviLocale(); Drive.programma(); }
+  // Dati rimasti sul telefono dalla versione precedente: vanno su Drive al primo accesso.
+  function vecchiDatiLocali() {
+    try { const s = leggi(K.dati); if (s) return normalizza(JSON.parse(s)); } catch (e) { /* dati rovinati */ }
+    return null;
+  }
+
+  // Ogni modifica parte subito verso Drive.
+  function salva() { D.aggiornato = Date.now(); Drive.modificato(); }
 
   // Unisce i dati di due dispositivi senza perdere spese.
   function unisci(a, b) {
@@ -153,7 +158,8 @@
   };
 
   // ---------- Stato dello schermo ----------
-  const S = { tab: 'posso', prezzo: '', catId: null, verdetto: null, stipendioArr: '', extraImp: '', nuovaCat: '', pendente: null, ridisegna: false };
+  // fase: config (manca il Client ID) · accesso · carico · errore · pronto
+  const S = { fase: 'accesso', test: [], ultimi: {}, vista: null, umorePrec: undefined, tab: 'posso', prezzo: '', catId: null, verdetto: null, stipendioArr: '', extraImp: '', nuovaCat: '', pendente: null, ridisegna: false };
   const $ = (q) => document.querySelector(q);
 
   // ---------- Icone ----------
@@ -186,19 +192,20 @@
     const testoDisp = eur(disp);
     const v = S.verdetto;
     const pronto = parseEuro(S.prezzo) > 0 && C.cat(S.catId);
+    S.umorePrec = u;
 
     return `${testata(`${mese} · giorno ${g} di ${tot}`, 'Posso?')}
       <section class="vetro saldo" aria-label="Saldo del mese">
-        <img class="cane" src="img/${foto}.png" alt="${alt}">
+        <img class="cane${S.umorePrec !== undefined && S.umorePrec !== u ? ' cambia' : ''}" src="img/${foto}.png" alt="${alt}">
         <div class="disponibile">
           <span class="etichetta-piccola">Disponibile</span>
-          <span class="cifra-grande${disp < 0 ? ' negativa' : ''}${testoDisp.length > 8 ? ' lunga' : ''}">${testoDisp}</span>
+          <span class="cifra-grande${disp < 0 ? ' negativa' : ''}${testoDisp.length > 8 ? ' lunga' : ''}" data-conta="disp" data-valore="${disp}">${testoDisp}</span>
         </div>
         <div class="griglia2">
-          <div class="mini"><span>Speso</span><strong>${eur(C.speso())}</strong></div>
-          <div class="mini"><span>Risparmio protetto</span><strong style="color: var(--accento)">${eur(C.protetto())}</strong></div>
+          <div class="mini"><span>Speso</span><strong data-conta="speso" data-valore="${C.speso()}">${eur(C.speso())}</strong></div>
+          <div class="mini"><span>Risparmio protetto</span><strong style="color: var(--accento)" data-conta="protetto" data-valore="${C.protetto()}">${eur(C.protetto())}</strong></div>
         </div>
-        <div class="barra${pct >= 100 ? ' piena' : ''}" role="progressbar" aria-label="Budget usato" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width: ${pct}%"></span></div>
+        <div class="barra${pct >= 100 ? ' piena' : ''}" role="progressbar" aria-label="Budget usato" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span data-barra="usato" data-pct="${pct}" style="width: ${pct}%"></span></div>
         <p class="nota">${frase}</p>
       </section>
 
@@ -257,7 +264,7 @@
         <div class="torta">
           <div class="torta-grafico">
             <svg role="img" aria-label="${esc(descr)}" width="132" height="132" viewBox="0 0 132 132"><g transform="rotate(-90 66 66)" fill="none" stroke-width="16">${archi}</g></svg>
-            <div class="torta-centro"><strong>${eur0(C.protetto())}</strong><span>risparmio</span></div>
+            <div class="torta-centro"><strong data-conta="torta" data-formato="0" data-valore="${C.protetto()}">${eur0(C.protetto())}</strong><span>risparmio</span></div>
           </div>
           <ul class="legenda">
             ${fette.map(([n, val, col]) => `<li><span class="quadratino" style="background: ${col}"></span><span class="voce">${n}</span><strong>${eur0(val)}</strong></li>`).join('')}
@@ -278,14 +285,14 @@
 
       ${sig ? `<section class="avviso" aria-label="Sigarette in un anno">
         <div class="colonna"><span class="titolo-a">Sigarette in un anno</span><span class="nota">A questo ritmo: ${eur(sigMese)} al mese</span></div>
-        <span class="cifra">${eur0(sigMese * 12)}</span>
+        <span class="cifra" data-conta="sigarette" data-formato="0" data-valore="${sigMese * 12}">${eur0(sigMese * 12)}</span>
       </section>` : ''}
 
       <section class="vetro" aria-labelledby="t-pac">
         <h2 id="t-pac">Piano di accumulo</h2>
         <div class="griglia3">
           <div class="mini"><span>Rata mensile</span><strong>${eur(D.pac)}</strong></div>
-          <div class="mini"><span>Versato finora</span><strong style="color: var(--verde)">${eur(D.pacTotale)}</strong></div>
+          <div class="mini"><span>Versato finora</span><strong style="color: var(--verde)" data-conta="versato" data-valore="${D.pacTotale}">${eur(D.pacTotale)}</strong></div>
           <div class="mini"><span>13ª e 14ª</span><strong>${eur(C.extraAnno())}</strong></div>
         </div>
       </section>
@@ -368,14 +375,95 @@
       </section>`;
   }
 
+  // ---------- Ingresso: accesso a Google e test di collegamento ----------
+  const ICONA_TEST = {
+    attesa: '<span class="test-icona attesa" aria-hidden="true"></span>',
+    corso: '<span class="test-icona corso" aria-hidden="true"></span>',
+    ok: '<svg class="test-icona" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0B7A6E" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    ko: '<svg class="test-icona" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B42329" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+  };
+  const TESTO_TEST = { attesa: 'in attesa', corso: 'in corso', ok: 'riuscito', ko: 'non riuscito' };
+  function listaTest() {
+    if (!S.test.length) return '';
+    return `<ul class="test" aria-label="Test di collegamento">${S.test.map((t) => `<li class="${t.stato}">
+      ${ICONA_TEST[t.stato]}<span class="test-nome">${esc(t.nome)}<span class="nascosto">: ${TESTO_TEST[t.stato]}</span></span>
+      ${t.dett ? `<span class="test-dett">${esc(t.dett)}</span>` : ''}</li>`).join('')}</ul>`;
+  }
+  function aggiornaTest() { document.querySelectorAll('[data-test-lista]').forEach((el) => { el.innerHTML = listaTest(); }); }
+
+  function viewIngresso() {
+    const f = S.fase;
+    let corpo;
+    if (f === 'config') {
+      corpo = `<p class="nota">Manca il collegamento a Google. Inserisci il Client ID OAuth nel file <strong>config.js</strong> del sito: le istruzioni sono nel README del progetto.</p>`;
+    } else {
+      const bottone = f === 'carico' ? ''
+        : `<button type="button" class="btn" data-act="accedi"${Drive.client ? '' : ' disabled'}>${Drive.client ? 'Accedi con Google' : 'Preparo Google…'}</button>`;
+      corpo = `<p class="nota">I tuoi dati sono salvati solo nel tuo Google Drive, nel file ${Drive.NOME}. Niente resta sul telefono, così non si perdono.</p>
+        ${bottone}
+        <div data-test-lista>${listaTest()}</div>
+        ${f === 'errore' && Drive.token() ? '<button type="button" class="btn-sec" data-act="riprova">Riprova il collegamento</button>' : ''}`;
+    }
+    return `<section class="vetro ingresso" aria-labelledby="t-ingresso">
+      <img class="logo" src="img/icon-192.png" alt="" width="96" height="96">
+      <h1 id="t-ingresso">Risparmio</h1>
+      ${corpo}
+    </section>`;
+  }
+
   function render() {
     S.ridisegna = false;
     const app = $('#app');
+    const pronto = S.fase === 'pronto';
+    const tabbar = document.querySelector('.tabbar');
+    tabbar.hidden = !pronto;
+    // Le sezioni entrano con un'animazione solo quando cambi schermata.
+    const vista = pronto ? S.tab : 'ingresso-' + S.fase;
+    const entrata = vista !== S.vista;
+    S.vista = vista;
+    app.classList.remove('entrata');
+    if (entrata) { void app.offsetWidth; app.classList.add('entrata'); }
+    if (!pronto) { app.innerHTML = viewIngresso(); return; }
+    tabbar.style.setProperty('--i', String(['posso', 'riepilogo', 'impostazioni'].indexOf(S.tab)));
     app.innerHTML = S.tab === 'riepilogo' ? viewRiepilogo() : S.tab === 'impostazioni' ? viewImpostazioni() : viewPosso();
+    animaNumeri(entrata);
     document.querySelectorAll('.tabbar [data-act="tab"]').forEach((b) => {
       if (b.dataset.id === S.tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     });
   }
+  // Le cifre scorrono fino al valore nuovo e le barre crescono.
+  const movimentoRidotto = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function animaNumeri(entrata) {
+    const ridotto = movimentoRidotto();
+    document.querySelectorAll('#app [data-conta]').forEach((el) => {
+      const k = el.dataset.conta, a = Number(el.dataset.valore) || 0;
+      const f = el.dataset.formato === '0' ? eur0 : eur;
+      const da = entrata ? 0 : (k in S.ultimi ? S.ultimi[k] : a);
+      S.ultimi[k] = a;
+      if (ridotto || Math.abs(da - a) < 0.005) return;
+      const t0 = performance.now(), durata = 800;
+      el.textContent = f(da);
+      const passo = (t) => {
+        if (!el.isConnected) return;
+        const x = Math.min(1, (t - t0) / durata), e = 1 - Math.pow(1 - x, 3);
+        el.textContent = x < 1 ? f(da + (a - da) * e) : f(a);
+        if (x < 1) requestAnimationFrame(passo);
+      };
+      requestAnimationFrame(passo);
+    });
+    document.querySelectorAll('#app [data-barra]').forEach((el) => {
+      const k = 'barra-' + el.dataset.barra, a = Number(el.dataset.pct) || 0;
+      const da = entrata ? 0 : (k in S.ultimi ? S.ultimi[k] : a);
+      S.ultimi[k] = a;
+      if (ridotto || da === a) return;
+      el.style.transition = 'none';
+      el.style.width = da + '%';
+      void el.offsetWidth;
+      el.style.transition = '';
+      el.style.width = a + '%';
+    });
+  }
+
   // Ridisegna senza togliere il cursore da un campo che stai scrivendo.
   function ridisegnaSicuro() {
     const a = document.activeElement;
@@ -402,7 +490,7 @@
   function mostraPendente() {
     const m = $('#modale');
     const p = S.pendente;
-    if (!p) { m.hidden = true; m.innerHTML = ''; return; }
+    if (!p || S.fase !== 'pronto') { m.hidden = true; m.innerHTML = ''; return; }
     m.hidden = false;
     m.innerHTML = `<div class="foglio vetro" role="dialog" aria-modal="true" aria-labelledby="t-pend">
       <h2 id="t-pend">Che spesa era?</h2>
@@ -494,10 +582,42 @@
       S.nuovaCat = '';
       salva(); render();
     },
-    'drive-tocca'() { Drive.tocca(); },
-    'drive-scollega'() {
-      if (!confirm('Scollegare Google Drive? I dati restano sul telefono e il file su Drive non viene cancellato.')) return;
-      Drive.scollega();
+    accedi() {
+      Drive.accedi().then(apri).catch((e) => {
+        toast(e.message === 'nonpronto' ? 'Google non è ancora pronto: riprova tra un attimo' : 'Accesso a Google non riuscito');
+      });
+    },
+    riprova() { apri(); },
+    ricollega() {
+      Drive.accedi().then(() => {
+        mostraBlocco();
+        if (Drive.sporco) Drive.salvaOra(); else Drive.ricarica();
+        toast('Ricollegato a Google Drive');
+      }).catch(() => toast('Accesso a Google non riuscito'));
+    },
+    'drive-tocca'() {
+      if (!Drive.token()) { mostraBlocco(); return; }
+      if (Drive.stato === 'errore' || Drive.sporco) Drive.salvaOra(); else Drive.ricarica(true);
+    },
+    async prova() {
+      if (!Drive.token()) { mostraBlocco(); return; }
+      if (Drive.inCorso) await Drive.inCorso;
+      try {
+        D = await provaCollegamento();
+        Drive.sporco = false;
+        Drive.imposta('ok');
+        toast('Collegamento riuscito');
+      } catch (e) {
+        Drive.imposta(e.message === 'auth' ? 'scaduto' : 'errore');
+        toast('Il collegamento ha un problema: guarda il test');
+      }
+    },
+    esci() {
+      if (Drive.sporco && !confirm('Ci sono modifiche non ancora salvate su Drive. Uscire lo stesso?')) return;
+      if (!Drive.sporco && !confirm('Uscire da Google? I tuoi dati restano nel file su Drive.')) return;
+      Drive.esci();
+      D = null; S.test = []; S.fase = 'accesso'; S.tab = 'posso';
+      render();
     },
     esporta() {
       const blob = new Blob([JSON.stringify(D, null, 2)], { type: 'application/json' });
@@ -552,79 +672,123 @@
     }
   };
 
+  // Le azioni che cambiano i dati partono solo con l'accesso a Google valido,
+  // così ogni modifica arriva davvero su Drive.
+  const MODIFICANO = new Set(['registra', 'elimina-spesa', 'stipendio', 'extra', 'elimina-extra', 'essenziale', 'elimina-cat', 'aggiungi-cat', 'pendente-cat',
+    'stipendio-campo', 'speseFisse', 'pac', 'limite', 'importa']);
+  function puoModificare() {
+    if (S.fase !== 'pronto') return false;
+    if (Drive.token()) return true;
+    Drive.imposta('scaduto');
+    mostraBlocco();
+    return false;
+  }
+
   document.addEventListener('click', (e) => {
     const el = e.target.closest('[data-act]');
     if (!el || el.disabled) return;
     const f = azioni[el.dataset.act];
-    if (f) f(el, el.dataset.id, e);
+    if (!f) return;
+    if (MODIFICANO.has(el.dataset.act) && !puoModificare()) return;
+    f(el, el.dataset.id, e);
   });
   document.addEventListener('input', (e) => { const f = mentreScrivi[e.target.dataset.campo]; if (f) f(e.target); });
-  document.addEventListener('change', (e) => { const f = aFineCampo[e.target.dataset.campo]; if (f) f(e.target); });
+  document.addEventListener('change', (e) => {
+    const campo = e.target.dataset.campo;
+    const f = aFineCampo[campo];
+    if (!f) return;
+    if (MODIFICANO.has(campo === 'stipendio' ? 'stipendio-campo' : campo) && !puoModificare()) {
+      if (campo === 'importa') e.target.value = '';
+      return;
+    }
+    f(e.target);
+  });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && S.pendente) { S.pendente = null; mostraPendente(); return; }
     if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
     const campo = e.target.dataset.campo;
     const vai = { prezzo: 'chiedi', stipendioArr: 'stipendio', nuovaCat: 'aggiungi-cat' }[campo];
-    if (vai) { e.preventDefault(); const b = document.querySelector(`[data-act="${vai}"]`); if (b && !b.disabled) azioni[vai](b, b.dataset.id); }
+    if (vai) {
+      e.preventDefault();
+      const b = document.querySelector(`[data-act="${vai}"]`);
+      if (b && !b.disabled && (!MODIFICANO.has(vai) || puoModificare())) azioni[vai](b, b.dataset.id);
+    }
     else e.target.blur();
   });
 
   // ---------- Google Drive ----------
   const STATI = {
-    spento: ['Collega Drive', 'attenzione'],
-    scollegato: ['Sincronizza', 'attenzione'],
-    modifiche: ['Da salvare', 'attenzione'],
-    sincronizzo: ['Salvo…', ''],
-    ok: ['Su Drive', 'ok'],
-    errore: ['Errore Drive', 'errore']
+    ok: ['Salvato su Drive', 'ok'],
+    salvo: ['Salvo su Drive…', 'salvando'],
+    scaduto: ['Ricollega Google', 'errore'],
+    errore: ['Non salvato · Riprova', 'errore']
   };
   function chipDrive() {
-    const [testo, cls] = STATI[Drive.stato] || STATI.spento;
+    const [testo, cls] = STATI[Drive.stato] || STATI.ok;
     return `<button type="button" class="chip ${cls}" data-act="drive-tocca" aria-label="Google Drive: ${testo}">${ICONA.nuvola}${testo}</button>`;
   }
   function sezioneDrive() {
-    if (!Drive.configurato()) {
-      return `<h2 id="t-drive">Google Drive</h2>
-        <p class="nota">Per ora i dati sono salvati solo su questo dispositivo. Per salvarli anche su Google Drive, inserisci il Client ID di Google nel file config.js del sito.</p>`;
-    }
     const ultima = Number(leggi(K.ultima)) || 0;
     const quando = ultima ? new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(ultima)) : '';
+    const u = Drive.utente;
+    const chi = u ? [u.displayName, u.emailAddress].filter(Boolean).join(' · ') : '';
     const testo = {
-      spento: 'Non collegato. I dati sono solo su questo dispositivo.',
-      scollegato: "Collegato, ma Google chiede di nuovo l'accesso. Tocca Sincronizza.",
-      modifiche: "Ci sono modifiche da salvare. Tocca Sincronizza per mandarle su Drive.",
-      sincronizzo: 'Sto salvando su Drive…',
-      ok: `Tutto salvato nel file ${Drive.NOME} sul tuo Drive.`,
-      errore: 'Non sono riuscito a salvare su Drive. Controlla la connessione e riprova.'
-    }[Drive.stato];
-    const collegato = Drive.collegato();
+      ok: `Tutto salvato nel file ${Drive.NOME}.`,
+      salvo: 'Sto salvando su Drive…',
+      scaduto: "L'accesso a Google è scaduto: ricollegati per continuare.",
+      errore: "L'ultimo salvataggio non è riuscito. Tocca Prova collegamento."
+    }[Drive.stato] || '';
     return `<h2 id="t-drive">Google Drive</h2>
-      <p class="nota">${testo}${quando ? ` Ultimo salvataggio: ${quando}.` : ''}</p>
+      <p class="nota">${esc(testo)}${chi ? ` Account: ${esc(chi)}.` : ''}${quando ? ` Ultimo salvataggio: ${quando}.` : ''}</p>
+      <div data-test-lista>${listaTest()}</div>
       <div class="riga-bottoni">
-        <button type="button" class="${collegato ? 'btn-sec' : 'btn piccolo'}" data-act="drive-tocca"${Drive.stato === 'sincronizzo' ? ' disabled' : ''}>${collegato ? 'Sincronizza ora' : 'Collega Google Drive'}</button>
-        ${collegato ? '<button type="button" class="btn-sec" data-act="drive-scollega">Scollega</button>' : ''}
+        <button type="button" class="btn-sec" data-act="prova">Prova collegamento</button>
+        <button type="button" class="btn-sec" data-act="esci">Esci da Google</button>
       </div>`;
+  }
+
+  // Finestra che blocca l'app quando l'accesso a Google è scaduto.
+  function mostraBlocco() {
+    const b = $('#blocco');
+    if (S.fase !== 'pronto' || Drive.token()) { b.hidden = true; b.innerHTML = ''; return; }
+    if (!b.hidden) return;
+    b.hidden = false;
+    b.innerHTML = `<div class="foglio vetro" role="alertdialog" aria-modal="true" aria-labelledby="t-blocco" aria-describedby="d-blocco">
+      <h2 id="t-blocco">Ricollega Google Drive</h2>
+      <p class="nota" id="d-blocco">${Drive.sporco ? '<strong>Hai modifiche non ancora salvate.</strong> ' : ''}L'accesso a Google dura un'ora. Ricollegati per continuare: ogni modifica finisce subito su Drive.</p>
+      <button type="button" class="btn" data-act="ricollega">Ricollega</button>
+    </div>`;
+    const btn = b.querySelector('button');
+    if (btn) btn.focus();
+  }
+
+  class ErroreDrive extends Error {
+    constructor(tipo, stato) { super(tipo); this.stato = stato; }
+  }
+  function messaggioErrore(e) {
+    if (!e) return 'Errore sconosciuto';
+    if (e.message === 'auth') return 'Accesso a Google scaduto o negato';
+    if (e.message === 'rete') return 'Nessuna connessione a Internet';
+    if (e.message === 'formato') return 'Il file su Drive non è leggibile';
+    if (e.stato === 403) return 'Permesso negato: controlla che Google Drive API sia attiva';
+    if (e.stato === 429 || e.stato >= 500) return `Google non risponde (errore ${e.stato}), riprova tra poco`;
+    if (e.stato) return `Errore di Google Drive ${e.stato}`;
+    return 'Errore: ' + e.message;
   }
 
   const Drive = {
     SCOPE: 'https://www.googleapis.com/auth/drive.file',
     NOME: 'risparmio-dati.json',
-    stato: 'spento',
-    client: null, attesa: null, timer: null, inCorso: null, ancora: false, gen: 0,
+    stato: 'ok',
+    client: null, attesa: null, timer: null, inCorso: null, ancora: false, gen: 0, sporco: false, utente: null,
 
     configurato() { return !!String(CFG.GOOGLE_CLIENT_ID || '').trim(); },
-    collegato() { return leggi(K.collegato) === '1'; },
-    haModifiche() { return leggi(K.modifiche) === '1'; },
     token() {
       try { const t = JSON.parse(leggi(K.token) || 'null'); if (t && t.scade > Date.now() + 60000) return t.valore; } catch (e) { /* niente */ }
       return null;
     },
-    statoDiRiposo() { return this.collegato() ? (this.haModifiche() ? 'modifiche' : 'scollegato') : 'spento'; },
 
-    init() {
-      if (!this.configurato()) return;
-      this.stato = this.token() ? 'ok' : this.statoDiRiposo();
-      // Lo script di Google si carica subito, così il tocco su "Collega" apre il login senza ritardi.
+    caricaGoogle() {
       const s = document.createElement('script');
       s.src = 'https://accounts.google.com/gsi/client';
       s.async = true;
@@ -637,65 +801,66 @@
             error_callback: (e) => this.fallito(e)
           });
         } catch (e) { console.warn(e); }
+        if (S.fase !== 'pronto') render();
+      };
+      s.onerror = () => {
+        S.test = [{ nome: 'Caricamento di Google', stato: 'ko', dett: 'Non raggiungibile: controlla la connessione' }];
+        if (S.fase !== 'pronto') render();
       };
       document.head.appendChild(s);
-      if (this.token()) this.sincronizza();
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible' && this.token()) this.sincronizza();
-      });
     },
-
+    // Va chiamata direttamente dal tocco, altrimenti il browser blocca la finestra di Google.
     accedi() {
       return new Promise((ok, ko) => {
         if (!this.client) { ko(new Error('nonpronto')); return; }
         this.attesa = { ok, ko };
-        this.client.requestAccessToken({ prompt: this.collegato() ? '' : 'consent' });
+        this.client.requestAccessToken({ prompt: leggi(K.collegato) === '1' ? '' : 'consent' });
       });
     },
     risposta(r) {
       const a = this.attesa; this.attesa = null;
       if (!r || r.error || !r.access_token) { if (a) a.ko(new Error((r && r.error) || 'negato')); return; }
+      if (google.accounts.oauth2.hasGrantedAllScopes && !google.accounts.oauth2.hasGrantedAllScopes(r, this.SCOPE)) {
+        if (a) a.ko(new Error('permesso'));
+        return;
+      }
       scrivi(K.token, JSON.stringify({ valore: r.access_token, scade: Date.now() + (Number(r.expires_in) || 3600) * 1000 }));
       scrivi(K.collegato, '1');
       if (a) a.ok();
     },
     fallito(e) { const a = this.attesa; this.attesa = null; if (a) a.ko(new Error((e && e.type) || 'errore')); },
-
-    async tocca() {
-      if (!this.configurato()) return;
-      if (this.token()) { await this.sincronizza(); if (this.stato === 'ok') toast('Dati salvati su Drive'); return; }
-      const primaVolta = !this.collegato();
-      try {
-        await this.accedi();
-        await this.sincronizza();
-        if (this.stato === 'ok') toast(primaVolta ? 'Collegato a Google Drive' : 'Dati salvati su Drive');
-      } catch (e) {
-        toast(e.message === 'nonpronto' ? 'Google non è ancora pronto: riprova tra un attimo' : 'Accesso a Google non riuscito');
-        this.imposta(this.statoDiRiposo());
-      }
-    },
-    scollega() {
+    esci() {
       const t = this.token();
       try { if (t && window.google && google.accounts) google.accounts.oauth2.revoke(t, () => {}); } catch (e) { /* niente */ }
-      [K.token, K.collegato, K.file, K.modifiche, K.ultima].forEach((k) => scrivi(k, null));
-      this.imposta('spento');
-      toast('Google Drive scollegato');
+      [K.token, K.collegato, K.file, K.ultima].forEach((k) => scrivi(k, null));
+      clearTimeout(this.timer);
+      this.sporco = false; this.utente = null; this.stato = 'ok';
     },
 
     async api(url, opt) {
       const t = this.token();
-      if (!t) throw new Error('auth');
+      if (!t) throw new ErroreDrive('auth');
       opt = opt || {};
-      const r = await fetch(url, Object.assign({}, opt, { headers: Object.assign({}, opt.headers, { Authorization: 'Bearer ' + t }) }));
-      if (r.status === 401) { scrivi(K.token, null); throw new Error('auth'); }
+      let r;
+      try {
+        r = await fetch(url, Object.assign({}, opt, { headers: Object.assign({}, opt.headers, { Authorization: 'Bearer ' + t }) }));
+      } catch (e) { throw new ErroreDrive('rete'); }
+      if (r.status === 401) { scrivi(K.token, null); throw new ErroreDrive('auth', 401); }
       return r;
+    },
+    async chiSei() {
+      const r = await this.api('https://www.googleapis.com/drive/v3/about?fields=user(displayName,emailAddress)');
+      if (!r.ok) throw new ErroreDrive('http', r.status);
+      const j = await r.json();
+      this.utente = j.user || null;
+      return this.utente;
     },
     async trova() {
       const salvato = leggi(K.file);
       if (salvato) return salvato;
       const q = encodeURIComponent(`name='${this.NOME}' and trashed=false`);
       const r = await this.api(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&orderBy=modifiedTime%20desc&pageSize=1&fields=files(id)`);
-      if (!r.ok) throw new Error('drive');
+      if (!r.ok) throw new ErroreDrive('http', r.status);
       const j = await r.json();
       const f = j.files && j.files[0];
       if (f) { scrivi(K.file, f.id); return f.id; }
@@ -705,17 +870,30 @@
     async scarica(id) {
       const r = await this.api(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`);
       if (r.status === 404) { scrivi(K.file, null); return undefined; }
-      if (!r.ok) throw new Error('drive');
+      if (!r.ok) throw new ErroreDrive('http', r.status);
       const t = await r.text();
-      return t.trim() ? normalizza(JSON.parse(t)) : null;
+      if (!t.trim()) return null;
+      try { return normalizza(JSON.parse(t)); } catch (e) { throw new ErroreDrive('formato'); }
+    },
+    // Scarica il file, ritrovandolo se è stato spostato o ricreato.
+    async leggiFile() {
+      let id = await this.trova();
+      if (!id) return { id: null, dati: null };
+      let dati = await this.scarica(id);
+      if (dati === undefined) {
+        id = await this.trova();
+        dati = id ? await this.scarica(id) : null;
+        if (dati === undefined) { id = null; dati = null; }
+      }
+      return { id, dati };
     },
     async crea(dati) {
       const b = 'risparmio' + Date.now();
-      const corpo = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name: this.NOME, mimeType: 'application/json', description: 'Dati dell\'app Risparmio' })}\r\n--${b}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(dati)}\r\n--${b}--`;
+      const corpo = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name: this.NOME, mimeType: 'application/json', description: "Dati dell'app Risparmio" })}\r\n--${b}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(dati)}\r\n--${b}--`;
       const r = await this.api('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
         method: 'POST', headers: { 'Content-Type': `multipart/related; boundary=${b}` }, body: corpo
       });
-      if (!r.ok) throw new Error('drive');
+      if (!r.ok) throw new ErroreDrive('http', r.status);
       const j = await r.json();
       scrivi(K.file, j.id);
       return j.id;
@@ -725,50 +903,74 @@
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dati)
       });
       if (r.status === 404) { scrivi(K.file, null); return false; }
-      if (!r.ok) throw new Error('drive');
+      if (!r.ok) throw new ErroreDrive('http', r.status);
       return true;
     },
+    async scriviFile(id, dati) {
+      if (id && await this.aggiorna(id, dati)) return id;
+      return this.crea(dati);
+    },
+    segnaOra() { scrivi(K.ultima, String(Date.now())); },
 
-    sincronizza() {
-      if (!this.configurato()) return Promise.resolve();
-      if (!this.token()) { this.imposta(this.statoDiRiposo()); return Promise.resolve(); }
-      if (this.inCorso) { this.ancora = true; return this.inCorso; }
+    // Dopo ogni modifica: salva quasi subito (raccoglie i tocchi ravvicinati).
+    modificato() {
+      this.gen++;
+      this.sporco = true;
+      this.imposta('salvo');
       clearTimeout(this.timer);
+      this.timer = setTimeout(() => this.salvaOra(), 300);
+    },
+    // Legge il file, unisce le modifiche di altri dispositivi e riscrive: nessuna spesa va persa.
+    salvaOra() {
+      clearTimeout(this.timer);
+      if (!this.token()) { this.imposta('scaduto'); mostraBlocco(); return Promise.resolve(); }
+      if (this.inCorso) { this.ancora = true; return this.inCorso; }
       const gen = this.gen;
-      this.imposta('sincronizzo');
+      this.imposta('salvo');
       this.inCorso = (async () => {
         try {
-          let id = await this.trova();
-          let remoto = null;
-          if (id) {
-            remoto = await this.scarica(id);
-            if (remoto === undefined) { id = await this.trova(); remoto = id ? await this.scarica(id) : null; if (remoto === undefined) { id = null; remoto = null; } }
-          }
           const prima = JSON.stringify(D);
-          if (remoto) { D = unisci(D, remoto); scriviLocale(); }
-          if (id && !(await this.aggiorna(id, D))) id = null;
-          if (!id) await this.crea(D);
-          if (this.gen === gen) scrivi(K.modifiche, '0');
-          scrivi(K.ultima, String(Date.now()));
-          this.imposta('ok');
+          const { id, dati } = await this.leggiFile();
+          if (dati) D = unisci(D, dati);
+          await this.scriviFile(id, D);
+          if (this.gen === gen) this.sporco = false;
+          this.segnaOra();
+          this.imposta(this.sporco ? 'salvo' : 'ok');
           if (JSON.stringify(D) !== prima) ridisegnaSicuro();
         } catch (e) {
           console.warn('Drive:', e);
-          this.imposta(e.message === 'auth' ? this.statoDiRiposo() : 'errore');
+          if (e.message === 'auth') { this.imposta('scaduto'); mostraBlocco(); } else { this.imposta('errore'); toast('Salvataggio su Drive non riuscito: ' + messaggioErrore(e)); }
         } finally {
           this.inCorso = null;
-          if (this.ancora) { this.ancora = false; this.sincronizza(); }
+          if (this.ancora) { this.ancora = false; this.salvaOra(); }
         }
       })();
       return this.inCorso;
     },
-    // Dopo ogni modifica: salva su Drive poco dopo, se l'accesso è ancora valido.
-    programma() {
-      this.gen++;
-      if (!this.configurato()) return;
-      scrivi(K.modifiche, '1');
-      if (this.token()) { clearTimeout(this.timer); this.timer = setTimeout(() => this.sincronizza(), 1200); }
-      else if (this.collegato()) this.imposta('modifiche');
+    // Rilegge da Drive le modifiche fatte su un altro dispositivo.
+    ricarica(avvisa) {
+      if (this.sporco) return this.salvaOra();
+      if (!this.token()) { this.imposta('scaduto'); mostraBlocco(); return Promise.resolve(); }
+      if (this.inCorso) return this.inCorso;
+      this.imposta('salvo');
+      this.inCorso = (async () => {
+        try {
+          const { dati } = await this.leggiFile();
+          if (dati && !this.sporco) {
+            const prima = JSON.stringify(D);
+            D = unisci(D, dati);
+            if (JSON.stringify(D) !== prima) ridisegnaSicuro();
+          }
+          this.imposta(this.sporco ? 'salvo' : 'ok');
+          if (avvisa) toast('Dati aggiornati da Drive');
+        } catch (e) {
+          if (e.message === 'auth') { this.imposta('scaduto'); mostraBlocco(); } else this.imposta('errore');
+        } finally {
+          this.inCorso = null;
+          if (this.sporco) this.salvaOra();
+        }
+      })();
+      return this.inCorso;
     },
     imposta(s) {
       this.stato = s;
@@ -777,14 +979,107 @@
     }
   };
 
+  // Test di collegamento passo per passo. Restituisce i dati letti (e salvati) su Drive.
+  async function provaCollegamento() {
+    const passi = [
+      ['google', 'Accesso a Google'],
+      ['drive', 'Google Drive raggiungibile'],
+      ['file', `File ${Drive.NOME}`],
+      ['lettura', 'Lettura dei dati'],
+      ['scrittura', 'Salvataggio su Drive']
+    ].map(([id, nome]) => ({ id, nome, stato: 'attesa', dett: '' }));
+    S.test = passi;
+    aggiornaTest();
+    const trova = (id) => passi.find((p) => p.id === id);
+    async function passo(id, fn) {
+      const p = trova(id);
+      p.stato = 'corso'; aggiornaTest();
+      const t0 = performance.now();
+      try {
+        const r = await fn(p);
+        p.stato = 'ok';
+        if (!p.dett) p.dett = `${Math.round(performance.now() - t0)} ms`;
+        aggiornaTest();
+        return r;
+      } catch (e) {
+        p.stato = 'ko'; p.dett = messaggioErrore(e); aggiornaTest();
+        throw e;
+      }
+    }
+
+    await passo('google', async (p) => { if (!Drive.token()) throw new ErroreDrive('auth'); p.dett = 'Collegato'; });
+    await passo('drive', async (p) => {
+      const u = await Drive.chiSei();
+      p.dett = u ? (u.emailAddress || u.displayName || '') : '';
+    });
+    let id = await passo('file', async (p) => {
+      const trovato = await Drive.trova();
+      p.dett = trovato ? 'Trovato' : 'Non esiste ancora: lo creo';
+      return trovato;
+    });
+    let remoto = await passo('lettura', async (p) => {
+      if (!id) { p.dett = 'Nessun dato precedente'; return null; }
+      const r = await Drive.leggiFile();
+      id = r.id;
+      p.dett = r.dati ? `${r.dati.spese.length} spese, ${r.dati.categorie.length} categorie` : 'File vuoto';
+      return r.dati;
+    });
+
+    let dati = remoto;
+    if (D) dati = dati ? unisci(D, dati) : D;
+    const vecchi = vecchiDatiLocali();
+    if (vecchi) dati = dati ? unisci(dati, vecchi) : vecchi;
+    if (!dati) { dati = nuoviDati(); dati.aggiornato = Date.now(); }
+
+    await passo('scrittura', async () => { id = await Drive.scriviFile(id, dati); });
+    if (vecchi) scrivi(K.dati, null); // i vecchi dati del telefono ora sono su Drive
+    Drive.segnaOra();
+    return dati;
+  }
+
+  // Dopo l'accesso: test di collegamento e caricamento dei dati.
+  async function apri() {
+    S.fase = 'carico';
+    render();
+    try {
+      D = await provaCollegamento();
+      Drive.sporco = false;
+      Drive.stato = 'ok';
+      S.fase = 'pronto';
+      render();
+      mostraPendente();
+    } catch (e) {
+      console.warn('Collegamento:', e);
+      S.fase = 'errore';
+      render();
+    }
+  }
+
   // ---------- Avvio ----------
   leggiLink();
-  Drive.init();
-  render();
-  mostraPendente();
+  if (!Drive.configurato()) {
+    S.fase = 'config';
+    render();
+  } else {
+    Drive.caricaGoogle();
+    if (Drive.token()) apri(); else { S.fase = 'accesso'; render(); }
+  }
+
+  // Quando torni sull'app: controlla l'accesso e prendi le modifiche dagli altri dispositivi.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || S.fase !== 'pronto') return;
+    if (!Drive.token()) { Drive.imposta('scaduto'); mostraBlocco(); return; }
+    Drive.ricarica();
+    ridisegnaSicuro();
+  });
+  setInterval(() => {
+    if (S.fase === 'pronto' && !Drive.token()) { Drive.imposta('scaduto'); mostraBlocco(); }
+  }, 30000);
+  window.addEventListener('beforeunload', (e) => {
+    if (Drive.sporco) { e.preventDefault(); e.returnValue = ''; }
+  });
+
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     navigator.serviceWorker.register('sw.js').catch(() => { /* senza offline */ });
   }
-  // A cavallo della mezzanotte, ridisegna per aggiornare giorno e mese.
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ridisegnaSicuro(); });
 })();

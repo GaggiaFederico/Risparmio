@@ -10,10 +10,12 @@ Web app per iPhone che ti dice se puoi permetterti una spesa e ti aiuta a rispar
 - **Mascotte:** un husky in smoking se risparmi, normale se sei nella media, trasandato se esageri.
 - **Riepilogo:** dove va lo stipendio, spese per categoria, sigarette in un anno, piano di accumulo.
 - **Stipendio, PAC, 13ª e 14ª:** registri quando arrivano e il versato del PAC cresce da solo.
-- **Google Drive:** i dati restano sul telefono e, se vuoi, si salvano nel file `risparmio-dati.json` sul tuo Drive.
+- **Solo Google Drive:** i dati stanno esclusivamente nel file `risparmio-dati.json` sul tuo Drive, mai sul telefono. Ogni modifica viene salvata subito.
+- **Test di collegamento:** all'accesso, e quando vuoi da Impostazioni, controlla passo per passo Google, Drive, il file, la lettura e il salvataggio.
+- **Animazioni:** cifre che scorrono, barre che crescono, ciambella che si disegna, cane che respira e salta quando cambia umore.
 - **Apple Pay:** con un'automazione di Comandi Rapidi l'app ti chiede la categoria dopo ogni pagamento.
 
-Funziona anche offline e si installa dalla schermata Home. Nessun server: solo HTML, CSS e JavaScript.
+Si installa dalla schermata Home. Nessun server: solo HTML, CSS e JavaScript. Serve la connessione a Internet, perché i dati stanno su Drive.
 
 ## Pubblicare con GitHub Pages
 
@@ -32,7 +34,9 @@ Funziona anche offline e si installa dalla schermata Home. Nessun server: solo H
    window.RISPARMIO_CONFIG = { GOOGLE_CLIENT_ID: '1234-abc.apps.googleusercontent.com' };
    ```
 
-5. Nell'app: **Impostazioni → Google Drive → Collega Google Drive**.
+5. Apri l'app e tocca **Accedi con Google**: parte il test di collegamento e poi si caricano i tuoi dati.
+
+Senza Client ID l'app mostra solo la schermata che chiede di configurarlo.
 
 L'app chiede solo il permesso `drive.file`: vede esclusivamente il file che crea lei. L'ID client non è un segreto e può stare nel repository pubblico.
 
@@ -52,8 +56,9 @@ Dopo ogni pagamento l'app si apre e chiede "Che spesa era?".
 
 ## Note
 
-- L'accesso a Google dura un'ora; poi basta toccare **Sincronizza** in alto.
-- Su iPhone, Safari e l'app sulla schermata Home hanno memorie separate: collegando Drive in entrambi, le spese si uniscono senza perdersi.
+- L'accesso a Google dura un'ora. Quando scade, l'app si blocca con **Ricollega**: così nessuna modifica resta solo sul telefono.
+- Prima di ogni salvataggio l'app rilegge il file e unisce le spese fatte da altri dispositivi, quindi non se ne perde nessuna.
+- Se avevi usato la versione precedente, le spese rimaste sul telefono vengono portate su Drive al primo accesso.
 - Dopo ogni modifica ai file, aumenta `VERSIONE` in `sw.js` (es. `risparmio-v2`) perché i telefoni scarichino la versione nuova.
 
 ## Licenza

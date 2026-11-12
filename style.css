@@ -300,7 +300,21 @@ h2 { margin: 0; font-size: 18px; font-weight: 900; }
   z-index: 10;
 }
 .tabbar button { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 0; border-radius: 26px; background: transparent; color: var(--tenue); font-size: 11px; font-weight: 800; }
-.tabbar button[aria-current="page"] { background: var(--accento); color: #fff; }
+.tabbar[hidden] { display: none; }
+.tabbar button { position: relative; z-index: 1; transition: color 0.3s, transform 0.15s; }
+.tabbar button[aria-current="page"] { color: #fff; }
+.indicatore {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 6px;
+  width: calc((100% - 20px) / 3);
+  border-radius: 26px;
+  background: var(--accento);
+  box-shadow: 0 6px 14px rgba(79, 70, 229, 0.35);
+  transform: translateX(calc(var(--i, 0) * (100% + 4px)));
+  transition: transform 0.5s cubic-bezier(0.34, 1.35, 0.64, 1);
+}
 
 /* Avvisi brevi */
 .toast {
@@ -323,6 +337,83 @@ h2 { margin: 0; font-size: 18px; font-weight: 900; }
 }
 .toast.vis { opacity: 1; transform: translate(-50%, 0); }
 
+/* ---------- Ingresso e test di collegamento ---------- */
+.ingresso { margin-top: 10vh; align-items: center; text-align: center; gap: 14px; padding: 28px 22px; }
+.ingresso .logo { width: 96px; height: 96px; border-radius: 24px; box-shadow: 0 14px 30px rgba(30, 27, 75, 0.25); }
+.ingresso .btn { align-self: stretch; }
+.ingresso [data-test-lista] { width: 100%; }
+.ingresso .btn-sec { align-self: stretch; }
+.test { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; text-align: left; width: 100%; }
+.test li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: rgba(255, 255, 255, 0.78); font-size: 14px; font-weight: 700; transition: background 0.3s; }
+.test li.ko { background: rgba(255, 236, 236, 0.9); }
+.test-nome { flex: 1; min-width: 0; }
+.test-dett { font-size: 12px; font-weight: 600; color: var(--tenue); text-align: right; max-width: 55%; overflow-wrap: anywhere; }
+.test li.ko .test-dett { color: var(--rosso-scuro); }
+.test-icona { width: 20px; height: 20px; flex: none; }
+span.test-icona { display: inline-block; border-radius: 50%; }
+span.test-icona.attesa { border: 2px solid #C9CCDD; }
+span.test-icona.corso { border: 2.5px solid rgba(79, 70, 229, 0.2); border-top-color: var(--accento); animation: gira 0.8s linear infinite; }
+.test li.ok svg, .test li.ko svg { animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.blocco { align-items: center; z-index: 25; }
+
+/* ---------- Animazioni ---------- */
+@keyframes sale { from { opacity: 0; transform: translateY(18px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes pop { 0% { opacity: 0; transform: scale(0.6); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes scuoti { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-7px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(2px); } }
+@keyframes respira { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-4px) rotate(-1.2deg); } }
+@keyframes cambia { 0% { transform: scale(0.4) rotate(-8deg); opacity: 0; } 60% { transform: scale(1.12) rotate(3deg); opacity: 1; } 100% { transform: scale(1) rotate(0deg); } }
+@keyframes galleggia { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@keyframes deriva1 { from { transform: translate(0, 0) scale(1); } to { transform: translate(60px, 40px) scale(1.15); } }
+@keyframes deriva2 { from { transform: translate(0, 0) scale(1); } to { transform: translate(-50px, 60px) scale(0.9); } }
+@keyframes deriva3 { from { transform: translate(0, 0) scale(1); } to { transform: translate(70px, -50px) scale(1.1); } }
+@keyframes disegna { from { stroke-dasharray: 0 400; } }
+@keyframes cresce { from { width: 0; } }
+@keyframes gira { to { transform: rotate(360deg); } }
+@keyframes pulsa { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes foglio { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes velo { from { opacity: 0; } to { opacity: 1; } }
+
+/* Le macchie di colore dello sfondo si muovono piano */
+.b1 { animation: deriva1 18s ease-in-out infinite alternate; }
+.b2 { animation: deriva2 22s ease-in-out infinite alternate; }
+.b3 { animation: deriva3 20s ease-in-out infinite alternate; }
+
+/* Le sezioni entrano una dopo l'altra quando cambi schermata */
+.entrata > * { animation: sale 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.entrata > :nth-child(2) { animation-delay: 0.06s; }
+.entrata > :nth-child(3) { animation-delay: 0.12s; }
+.entrata > :nth-child(4) { animation-delay: 0.18s; }
+.entrata > :nth-child(5) { animation-delay: 0.24s; }
+.entrata > :nth-child(6) { animation-delay: 0.3s; }
+.entrata > :nth-child(n+7) { animation-delay: 0.36s; }
+
+/* Il cane respira e salta quando cambia umore */
+.cane { transform-origin: 50% 100%; animation: respira 4s ease-in-out infinite; }
+.cane.cambia { animation: cambia 0.7s cubic-bezier(0.34, 1.56, 0.64, 1), respira 4s ease-in-out 0.7s infinite; }
+.entrata .cane { animation: cambia 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s both, respira 4s ease-in-out 0.85s infinite; }
+.ingresso .logo { animation: galleggia 4s ease-in-out infinite; }
+
+/* Barre e ciambella */
+.barra > span { transition: width 0.9s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.entrata .barra-sottile > span { animation: cresce 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) 0.25s both; }
+.entrata .torta-grafico circle { animation: disegna 1s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s both; }
+.entrata .torta-centro { animation: pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s both; }
+
+/* Risposta: compare con un rimbalzo, il "no" scuote */
+.verdetto { animation: pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.verdetto.no { animation: pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), scuoti 0.45s ease-in-out 0.4s; }
+
+/* Tocchi */
+.btn, .btn-sec, .pillola, .chip, .x, .interruttore, .tabbar button { transition: transform 0.15s, background 0.2s, color 0.2s, box-shadow 0.2s; }
+.btn:active:not(:disabled), .btn-sec:active:not(:disabled), .pillola:active, .chip:active, .x:active, .tabbar button:active { transform: scale(0.95); }
+.pillola[aria-pressed="true"] { animation: pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.interruttore span { transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.chip.salvando svg { animation: pulsa 1s ease-in-out infinite; }
+
+/* Finestre */
+.modale:not([hidden]) { animation: velo 0.25s ease both; }
+.modale:not([hidden]) .foglio { animation: foglio 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.1) both; }
+
 @media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
 }

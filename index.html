@@ -21,7 +21,8 @@
 
 <main id="app" class="app" tabindex="-1"></main>
 
-<nav class="tabbar" aria-label="Sezioni">
+<nav class="tabbar" aria-label="Sezioni" hidden>
+  <span class="indicatore" aria-hidden="true"></span>
   <button type="button" data-act="tab" data-id="posso" aria-current="page">
     <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5V14"/><path d="M12 17.5h.01"/></svg>
     Posso?
@@ -37,6 +38,7 @@
 </nav>
 
 <div id="modale" class="modale" hidden></div>
+<div id="blocco" class="modale blocco" hidden></div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script src="config.js"></script>
