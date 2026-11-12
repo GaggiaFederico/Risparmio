@@ -1,0 +1,17 @@
+{
+  "name": "Risparmio",
+  "short_name": "Risparmio",
+  "description": "Ti dice se puoi permetterti una spesa e ti aiuta a risparmiare ogni mese.",
+  "lang": "it",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EEF0FB",
+  "theme_color": "#EEF0FB",
+  "icons": [
+    { "src": "img/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "img/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
