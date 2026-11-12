@@ -287,13 +287,17 @@
 
   function viewRiepilogo() {
     const mese = maiuscola(new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(new Date()));
-    const fette = [
-      ['Fisse', D.speseFisse, 'var(--lilla)'],
-      ['Speso', C.speso(), 'var(--accento)'],
-      ['Disponibile', Math.max(0, C.disponibile()), 'var(--teal)'],
-      ['Risparmio 20%', C.risparmio(), 'var(--ambra)'],
-      ['Rata PAC', C.pacMese(), 'var(--verde)']
-    ];
+    // Una fetta per ogni categoria in cui hai speso, poi fisse, PAC, risparmio e disponibile.
+    const spesePerCat = D.categorie.map((c) => [c, C.totCategoria(c.id)]).filter(([, t]) => t > 0);
+    const altro = C.totale((s) => !C.cat(s.categoriaID));
+    const fette = spesePerCat.map(([c, t]) => [c.nome, t, coloreCat(c), 'spesa'])
+      .concat(altro > 0 ? [['Altro', altro, '#94A3B8', 'spesa']] : [])
+      .concat([
+        ['Spese fisse', D.speseFisse, 'var(--lilla)', 'fisso'],
+        ['Rata PAC', C.pacMese(), 'var(--verde)', 'pac'],
+        ['Risparmio 20%', C.risparmio(), 'var(--ambra)', 'risparmio'],
+        ['Disponibile', Math.max(0, C.disponibile()), 'var(--teal)', 'disponibile']
+      ]);
     const somma = fette.reduce((a, f) => a + f[1], 0);
     const R = 52, CIRC = 2 * Math.PI * R;
     let pos = 0;
@@ -304,6 +308,10 @@
       pos += lung;
       return arco;
     }).join('') : `<circle cx="66" cy="66" r="${R}" stroke="rgba(30,27,75,0.08)"/>`;
+    // In legenda: tutto ciò che ha un valore, e la rata PAC se ne hai una impostata.
+    const inLegenda = fette.filter(([, v, , tipo]) => v > 0 || (tipo === 'pac' && D.pac > 0));
+    const pacMancante = D.pac > 0 && C.stipendiMese() > 0 && C.pacMese() <= 0;
+    const pct = (v) => (somma > 0 ? Math.round((v / somma) * 100) : 0);
     const descr = fette.map(([n, v]) => `${n} ${eur0(v)}`).join(', ');
 
     const perCat = D.categorie.map((c) => [c, C.totCategoria(c.id)]).filter(([, t]) => t > 0).sort((a, b) => b[1] - a[1]);
@@ -318,13 +326,15 @@
         <h2 id="t-stip">Dove va lo stipendio</h2>
         <div class="torta">
           <div class="torta-grafico">
-            <svg role="img" aria-label="${esc(descr)}" width="132" height="132" viewBox="0 0 132 132"><g transform="rotate(-90 66 66)" fill="none" stroke-width="16">${archi}</g></svg>
+            <svg role="img" aria-label="${esc(descr)}" viewBox="0 0 132 132"><g transform="rotate(-90 66 66)" fill="none" stroke-width="16">${archi}</g></svg>
             <div class="torta-centro"><strong data-conta="torta" data-formato="0" data-valore="${C.protetto()}">${eur0(C.protetto())}</strong><span>da parte</span></div>
           </div>
           <ul class="legenda">
-            ${fette.map(([n, val, col]) => `<li><span class="quadratino" style="background: ${col}"></span><span class="voce">${n}</span><strong>${eur0(val)}</strong></li>`).join('')}
+            ${inLegenda.map(([n, val, col]) => `<li><span class="quadratino" style="background: ${col}"></span><span class="voce">${esc(n)}</span><span class="pct">${pct(val)}%</span><strong>${eur0(val)}</strong></li>`).join('')}
           </ul>
         </div>
+        ${C.entrate() <= 0 ? '<p class="nota">Registra lo stipendio di questo mese per vedere come si divide.</p>' : ''}
+        ${pacMancante ? `<button type="button" class="btn-sec" data-act="registra-pac">Registra la rata PAC di questo mese (${eur(D.pac)})</button>` : ''}
       </section>
 
       <section class="vetro" aria-labelledby="t-cat">
@@ -332,7 +342,7 @@
         ${perCat.length || senzaCat ? '' : '<p class="nota">Nessuna spesa registrata questo mese.</p>'}
         ${perCat.map(([c, t]) => `<div class="cat-riga">
           <div class="cat-testa"><span class="nome">${esc(c.nome)}</span>${c.essenziale ? '<span class="etichetta">Essenziale</span>' : ''}<strong>${eur(t)}</strong></div>
-          <div class="barra-sottile" aria-hidden="true"><span class="${c.essenziale ? 'essenziale' : ''}" style="width: ${Math.round((t / massimo) * 100)}%"></span></div>
+          <div class="barra-sottile" aria-hidden="true"><span style="width: ${Math.round((t / massimo) * 100)}%; background: ${coloreCat(c)}"></span></div>
         </div>`).join('')}
         ${senzaCat ? `<div class="cat-riga"><div class="cat-testa"><span class="nome">Categorie eliminate</span><strong>${eur(senzaCat)}</strong></div>
           <div class="barra-sottile" aria-hidden="true"><span style="width: ${Math.round((senzaCat / massimo) * 100)}%"></span></div></div>` : ''}
@@ -356,6 +366,13 @@
         <span class="colonna"><span class="principale">Movimenti del mese</span><span class="nota">${ultime.length} ${ultime.length === 1 ? 'movimento' : 'movimenti'} · vedi e cancella</span></span>
         <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
       </button>`;
+  }
+
+  // Colore fisso per ogni categoria (stesso nella ciambella e nelle barre).
+  const COLORI_CAT = ['#4F46E5', '#EC4899', '#F97316', '#8B5CF6', '#06B6D4', '#EF4444', '#84CC16', '#D946EF', '#0EA5E9', '#A16207', '#64748B'];
+  function coloreCat(c) {
+    const i = D.categorie.findIndex((x) => x.id === c.id);
+    return COLORI_CAT[(i < 0 ? 0 : i) % COLORI_CAT.length];
   }
 
   // ---------- Movimenti: elenco per mese, con cancellazione ----------
@@ -721,6 +738,13 @@
       D.eliminati.push(id);
       salva(); render();
     },
+    'registra-pac'() {
+      if (!(D.pac > 0)) return;
+      const st = D.extra.filter((e) => e.tipo === 'stipendio' && stessoMese(e.data)).sort((a, b) => b.data - a.data)[0];
+      D.extra.push({ id: `${uid()}-pac`, tipo: 'pac', nome: 'Rata PAC', importo: D.pac, rif: st ? st.id : undefined, data: Date.now() });
+      salva(); render();
+      toast(`Rata PAC registrata: ${eur(D.pac)}`);
+    },
     stipendio() {
       const v = parseEuro(S.stipendioArr);
       if (!(v > 0)) return;
@@ -905,7 +929,7 @@
 
   // Le azioni che cambiano i dati partono solo con l'accesso a Google valido,
   // così ogni modifica arriva davvero su Drive.
-  const MODIFICANO = new Set(['registra', 'elimina-spesa', 'elimina-mov', 'elimina-selezionati', 'stipendio', 'extra', 'elimina-extra', 'essenziale', 'elimina-cat', 'aggiungi-cat', 'pendente-cat',
+  const MODIFICANO = new Set(['registra-pac', 'registra', 'elimina-spesa', 'elimina-mov', 'elimina-selezionati', 'stipendio', 'extra', 'elimina-extra', 'essenziale', 'elimina-cat', 'aggiungi-cat', 'pendente-cat',
     'speseFisse', 'pac', 'pacBase', 'limite', 'prezzoCat', 'importa']);
   function puoModificare() {
     if (S.fase !== 'pronto') return false;

@@ -209,15 +209,18 @@ h2 { margin: 0; font-size: 18px; font-weight: 900; }
 .verdetto.si .titolo-v { color: var(--verde); }
 
 /* Riepilogo */
-.torta { display: flex; align-items: center; gap: 18px; }
-.torta-grafico { position: relative; width: 132px; height: 132px; flex: none; }
+.torta { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.torta-grafico { position: relative; width: 176px; height: 176px; flex: none; }
+.torta-grafico svg { width: 100%; height: 100%; display: block; }
 .torta-centro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.torta-centro strong { font-size: 20px; font-weight: 900; }
+.torta-centro strong { font-size: 24px; font-weight: 900; }
 .torta-centro span { font-size: 11px; font-weight: 700; color: var(--tenue); }
-.legenda { margin: 0; padding: 0; list-style: none; flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; font-size: 14px; font-weight: 700; }
+.legenda { margin: 0; padding: 0; list-style: none; width: 100%; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; font-size: 14px; font-weight: 700; }
 .legenda li { display: flex; align-items: center; gap: 8px; }
 .legenda .quadratino { width: 10px; height: 10px; border-radius: 3px; flex: none; }
-.legenda .voce { flex: 1; }
+.legenda .voce { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.legenda .pct { font-size: 12px; font-weight: 700; color: var(--tenue); min-width: 3ch; text-align: right; }
+.legenda strong { min-width: 6ch; text-align: right; }
 .legenda strong { font-weight: 900; }
 
 .cat-riga { display: flex; flex-direction: column; gap: 6px; }
@@ -449,6 +452,7 @@ span.test-icona.corso { border: 2.5px solid rgba(79, 70, 229, 0.2); border-top-c
 /* Finestre */
 .modale:not([hidden]) { animation: velo 0.25s ease both; }
 .modale:not([hidden]) .foglio { animation: foglio 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.1) both; }
+
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
