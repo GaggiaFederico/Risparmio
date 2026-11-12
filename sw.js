@@ -1,6 +1,8 @@
-// Fa funzionare Risparmio anche senza rete.
+// Service worker di Risparmio.
+// Prima prova sempre il sito (così vedi subito la versione nuova); la copia salvata
+// serve solo se manca la rete, per mostrare l'app mentre si ricollega.
 // Quando cambi i file sul sito, aumenta il numero di VERSIONE.
-const VERSIONE = 'risparmio-v6';
+const VERSIONE = 'risparmio-v8';
 const FILE = [
   './', './index.html', './style.css', './app.js', './config.js', './manifest.webmanifest',
   './font/nunito.woff2',
@@ -9,7 +11,11 @@ const FILE = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSIONE).then((c) => c.addAll(FILE)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches.open(VERSIONE)
+      .then((c) => c.addAll(FILE.map((f) => new Request(f, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {
@@ -23,17 +29,17 @@ self.addEventListener('activate', (e) => {
 // Solo i file del sito: Google e Drive passano sempre dalla rete.
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  const url = new URL(req.url);
+  if (req.method !== 'GET' || url.origin !== self.location.origin) return;
   e.respondWith(
-    caches.match(req, { ignoreSearch: true }).then((salvato) => {
-      const rete = fetch(req).then((r) => {
-        if (r.ok && !new URL(req.url).search) {
+    fetch(req, { cache: 'no-cache' })
+      .then((r) => {
+        if (r.ok && !url.search) {
           const copia = r.clone();
           caches.open(VERSIONE).then((c) => c.put(req, copia));
         }
         return r;
-      }).catch(() => salvato);
-      return salvato || rete;
-    })
+      })
+      .catch(() => caches.match(req, { ignoreSearch: true }).then((salvato) => salvato || caches.match('./index.html')))
   );
 });
