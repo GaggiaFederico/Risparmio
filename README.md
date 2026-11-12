@@ -11,6 +11,8 @@ Web app per iPhone che ti dice se puoi permetterti una spesa e ti aiuta a rispar
 - **Riepilogo:** dove va lo stipendio, spese per categoria, sigarette in un anno, piano di accumulo.
 - **Movimenti:** tutte le spese e le mensilità extra mese per mese, divise per giorno. Le cancelli una alla volta o ne selezioni diverse insieme.
 - **Stipendio sempre manuale:** non c'è uno stipendio fisso. Ogni mese lo registri quando arriva, e finché non lo fai l'app te lo chiede in cima a Posso?. Ogni stipendio è un movimento che puoi cancellare.
+- **Prezzo proposto:** il tasto Sigarette è il primo e propone 5,50 €; ogni categoria può avere il suo prezzo proposto da Impostazioni.
+- **Categorie di partenza:** Benzina, Macchina, Spesa alimentare, Medicine (essenziali), Ristoranti, Vestiti, Svago, Sigarette.
 - **Rata PAC come movimento:** registrando lo stipendio viene creato anche il movimento "Rata PAC", che si somma ai soldi messi da parte (20% delle entrate + rata PAC) e al versato. Cancellando lo stipendio si toglie anche la sua rata.
 - **13ª e 14ª:** si sommano alle entrate del mese in cui arrivano.
 - **Solo Google Drive:** i dati stanno esclusivamente nel file `risparmio-dati.json` sul tuo Drive, mai sul telefono. Ogni modifica viene salvata subito.

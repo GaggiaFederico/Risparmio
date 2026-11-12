@@ -26,7 +26,7 @@
     : Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 
   const CATEGORIE_BASE = [
-    ['Benzina', true], ['Spesa alimentare', true], ['Medicine', true],
+    ['Benzina', true], ['Macchina', true], ['Spesa alimentare', true], ['Medicine', true],
     ['Ristoranti', false], ['Vestiti', false], ['Svago', false], ['Sigarette', false]
   ];
 
@@ -35,14 +35,28 @@
       versione: 1, aggiornato: 0,
       stipendio: 0, speseFisse: 0, pac: 0, pacTotale: 0,
       extra: [], spese: [], eliminati: [],
-      categorie: CATEGORIE_BASE.map(([nome, essenziale]) => ({ id: uid(), nome, essenziale, limite: null }))
+      categorie: CATEGORIE_BASE.map(([nome, essenziale]) => ({ id: uid(), nome, essenziale, limite: null, prezzo: PREZZI_BASE[nome] || null }))
     };
   }
+  // Prezzo proposto quando tocchi la categoria in Posso?
+  const PREZZI_BASE = { Sigarette: 5.5 };
+  // [id fisso, nome, essenziale, dopo quale categoria]
+  const NUOVE_CATEGORIE = [['cat-macchina', 'Macchina', true, 'Benzina']];
+
   function normalizza(d) {
     const base = nuoviDati();
     const o = Object.assign({}, base, d || {});
     ['extra', 'spese', 'eliminati', 'categorie'].forEach((k) => { if (!Array.isArray(o[k])) o[k] = base[k]; });
     ['stipendio', 'speseFisse', 'pac', 'pacTotale', 'aggiornato'].forEach((k) => { o[k] = Number(o[k]) || 0; });
+    // Categorie aggiunte dopo: compaiono una volta sola anche a chi ha già i dati (se le cancella non tornano).
+    NUOVE_CATEGORIE.forEach(([id, nome, essenziale, dopo]) => {
+      if (o.eliminati.includes(id) || o.categorie.some((c) => c.id === id || String(c.nome).trim().toLowerCase() === nome.toLowerCase())) return;
+      const i = o.categorie.findIndex((c) => String(c.nome).trim().toLowerCase() === dopo.toLowerCase());
+      o.categorie = o.categorie.slice();
+      o.categorie.splice(i < 0 ? o.categorie.length : i + 1, 0, { id, nome, essenziale, limite: null, prezzo: null });
+    });
+    // Categorie salvate prima che esistesse il prezzo proposto: le Sigarette partono da 5,50 €.
+    o.categorie = o.categorie.map((c) => (c.prezzo === undefined ? Object.assign({}, c, { prezzo: PREZZI_BASE[String(c.nome).trim()] || null }) : c));
     // Versione precedente: la rata del PAC stava dentro lo stipendio. Ora è un movimento a sé.
     const elim = new Set(o.eliminati);
     const rate = [];
@@ -103,7 +117,7 @@
   const fmt0 = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0, useGrouping: 'always' });
   const eur = (v) => { v = Math.round((Number(v) || 0) * 100) / 100; return (Number.isInteger(v) ? fmt0 : fmt2).format(v); };
   const eur0 = (v) => fmt0.format(Math.round(Number(v) || 0));
-  const numero = (v) => (v ? Number(v).toLocaleString('it-IT', { maximumFractionDigits: 2, useGrouping: 'always' }) : '');
+  const numero = (v) => (v ? Number(v).toLocaleString('it-IT', { minimumFractionDigits: Number.isInteger(Number(v)) ? 0 : 2, maximumFractionDigits: 2, useGrouping: 'always' }) : '');
 
   // Legge "12,50", "1.800", "€ 12.50", "12,50 €"...
   function parseEuro(s) {
@@ -187,7 +201,7 @@
   // ---------- Stato dello schermo ----------
   const ID_VALIDO = /^[\w.-]+\.apps\.googleusercontent\.com$/;
   // fase: config (manca il Client ID) · accesso · carico · errore · pronto
-  const S = { meseMov: 0, filtroMov: 'tutti', selezione: null, fase: 'accesso', clientId: '', test: [], ultimi: {}, vista: null, umorePrec: undefined, tab: 'posso', prezzo: '', catId: null, verdetto: null, stipendioArr: '', extraImp: '', nuovaCat: '', pendente: null, ridisegna: false };
+  const S = { prezzoProposto: null, meseMov: 0, filtroMov: 'tutti', selezione: null, fase: 'accesso', clientId: '', test: [], ultimi: {}, vista: null, umorePrec: undefined, tab: 'posso', prezzo: '', catId: null, verdetto: null, stipendioArr: '', extraImp: '', nuovaCat: '', pendente: null, ridisegna: false };
   const $ = (q) => document.querySelector(q);
 
   // ---------- Icone ----------
@@ -256,7 +270,7 @@
           <input type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(S.prezzo)}" data-campo="prezzo" aria-label="Prezzo in euro"><span class="euro">€</span>
         </label>
         <div class="pillole" role="group" aria-label="Categoria">
-          ${D.categorie.map((c) => `<button type="button" class="pillola" data-act="cat" data-id="${c.id}" aria-pressed="${c.id === S.catId}">${esc(c.nome)}</button>`).join('')}
+          ${D.categorie.slice().sort((a, b) => (b.prezzo > 0) - (a.prezzo > 0)).map((c) => `<button type="button" class="pillola${c.prezzo > 0 ? ' rapida' : ''}" data-act="cat" data-id="${c.id}" aria-pressed="${c.id === S.catId}">${esc(c.nome)}${c.prezzo > 0 ? ` <span class="prezzo-rapido">${eur(c.prezzo)}</span>` : ''}</button>`).join('')}
         </div>
         <button type="button" class="btn" data-act="chiedi" data-pulsante="chiedi"${pronto ? '' : ' disabled'}>Posso comprarlo?</button>
       </section>
@@ -468,7 +482,10 @@
             <button type="button" class="interruttore" role="switch" aria-checked="${c.essenziale}" aria-label="${esc(c.nome)} essenziale" data-act="essenziale" data-id="${c.id}"><span></span></button>
             <button type="button" class="x" data-act="elimina-cat" data-id="${c.id}" aria-label="Elimina categoria ${esc(c.nome)}">${ICONA.x}</button>
           </div>
-          <label class="limite">Limite al mese <input type="text" inputmode="decimal" placeholder="—" value="${esc(numero(c.limite))}" data-campo="limite" data-id="${c.id}" aria-label="Limite mensile per ${esc(c.nome)}"> €</label>
+          <div class="campi-cat">
+            <label class="limite">Limite al mese <input type="text" inputmode="decimal" placeholder="—" value="${esc(numero(c.limite))}" data-campo="limite" data-id="${c.id}" aria-label="Limite mensile per ${esc(c.nome)}"> €</label>
+            <label class="limite">Prezzo proposto <input type="text" inputmode="decimal" placeholder="—" value="${esc(numero(c.prezzo))}" data-campo="prezzoCat" data-id="${c.id}" aria-label="Prezzo proposto per ${esc(c.nome)}"> €</label>
+          </div>
         </div>`).join('')}
         <div class="aggiungi">
           <label class="campo piccolo testo"><span class="nascosto">Nuova categoria</span><input type="text" placeholder="Nuova categoria" value="${esc(S.nuovaCat)}" data-campo="nuovaCat" maxlength="30"></label>
@@ -640,7 +657,17 @@
   // ---------- Azioni ----------
   const azioni = {
     tab(el, id) { S.tab = id; render(); window.scrollTo(0, 0); },
-    cat(el, id) { S.catId = id; S.verdetto = null; render(); },
+    cat(el, id) {
+      const c = C.cat(id);
+      // Categoria con prezzo proposto: lo scrive lei se il prezzo è vuoto o era quello proposto da un'altra.
+      if (c && c.prezzo > 0 && (!S.prezzo.trim() || S.prezzoProposto === S.prezzo)) {
+        S.prezzo = numero(c.prezzo);
+        S.prezzoProposto = S.prezzo;
+      } else if (S.prezzoProposto === S.prezzo && !(c && c.prezzo > 0)) {
+        S.prezzo = ''; S.prezzoProposto = null;
+      }
+      S.catId = id; S.verdetto = null; render();
+    },
     chiedi() {
       const imp = parseEuro(S.prezzo), c = C.cat(S.catId);
       if (!(imp > 0) || !c) return;
@@ -735,7 +762,7 @@
       const nome = S.nuovaCat.trim();
       if (!nome) return;
       if (D.categorie.some((c) => c.nome.trim().toLowerCase() === nome.toLowerCase())) { toast('Questa categoria esiste già'); return; }
-      D.categorie.push({ id: uid(), nome, essenziale: false, limite: null });
+      D.categorie.push({ id: uid(), nome, essenziale: false, limite: null, prezzo: null });
       S.nuovaCat = '';
       salva(); render();
     },
@@ -834,6 +861,7 @@
     clientId(el) { S.clientId = el.value; abilita('clientId', ID_VALIDO.test(el.value.trim())); },
     prezzo(el) {
       S.prezzo = el.value;
+      S.prezzoProposto = null;
       if (S.verdetto) { S.verdetto = null; const v = $('#verdetto'); if (v) v.remove(); }
       abilita('chiedi', parseEuro(S.prezzo) > 0 && !!C.cat(S.catId));
     },
@@ -854,6 +882,10 @@
     pacBase(el) { const v = parseEuro(el.value); D.pacTotale = v > 0 ? v : 0; el.value = numero(D.pacTotale); salva(); },
     speseFisse(el) { const v = parseEuro(el.value); D.speseFisse = v > 0 ? v : 0; el.value = numero(D.speseFisse); salva(); },
     pac(el) { const v = parseEuro(el.value); D.pac = v > 0 ? v : 0; el.value = numero(D.pac); salva(); },
+    prezzoCat(el) {
+      const c = C.cat(el.dataset.id); if (!c) return;
+      const v = parseEuro(el.value); c.prezzo = v > 0 ? v : null; el.value = numero(c.prezzo); salva();
+    },
     limite(el) {
       const c = C.cat(el.dataset.id); if (!c) return;
       const v = parseEuro(el.value); c.limite = v > 0 ? v : null; el.value = numero(c.limite); salva();
@@ -874,7 +906,7 @@
   // Le azioni che cambiano i dati partono solo con l'accesso a Google valido,
   // così ogni modifica arriva davvero su Drive.
   const MODIFICANO = new Set(['registra', 'elimina-spesa', 'elimina-mov', 'elimina-selezionati', 'stipendio', 'extra', 'elimina-extra', 'essenziale', 'elimina-cat', 'aggiungi-cat', 'pendente-cat',
-    'speseFisse', 'pac', 'pacBase', 'limite', 'importa']);
+    'speseFisse', 'pac', 'pacBase', 'limite', 'prezzoCat', 'importa']);
   function puoModificare() {
     if (S.fase !== 'pronto') return false;
     if (Drive.token()) return true;
@@ -1272,6 +1304,12 @@
       render();
     }
   }
+
+  // ---------- Zoom bloccato ----------
+  // Safari su iPhone ignora user-scalable=no, quindi il pizzico con due dita si ferma qui.
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach((ev) => document.addEventListener(ev, (e) => e.preventDefault(), { passive: false }));
+  document.addEventListener('touchmove', (e) => { if (e.touches && e.touches.length > 1) e.preventDefault(); }, { passive: false });
+  // Il doppio tocco lo blocca già touch-action: manipulation nel CSS (senza perdere i tocchi veloci).
 
   // ---------- Avvio ----------
   leggiLink();
