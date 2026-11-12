@@ -264,25 +264,24 @@
         <p class="nota">${frase}</p>
       </section>
 
-      <section class="vetro" aria-labelledby="t-compra">
+      <section class="vetro compra" aria-labelledby="t-compra">
         <h2 id="t-compra">Cosa vuoi comprare?</h2>
-        <label class="campo"><span class="nome-campo">Prezzo</span>
-          <input type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(S.prezzo)}" data-campo="prezzo" aria-label="Prezzo in euro"><span class="euro">€</span>
-        </label>
         <div class="pillole" role="group" aria-label="Categoria">
           ${D.categorie.slice().sort((a, b) => (b.prezzo > 0) - (a.prezzo > 0)).map((c) => `<button type="button" class="pillola${c.prezzo > 0 ? ' rapida' : ''}" data-act="cat" data-id="${c.id}" aria-pressed="${c.id === S.catId}">${esc(c.nome)}${c.prezzo > 0 ? ` <span class="prezzo-rapido">${eur(c.prezzo)}</span>` : ''}</button>`).join('')}
         </div>
+        <label class="campo"><span class="nome-campo">Prezzo</span>
+          <input type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(S.prezzo)}" data-campo="prezzo" aria-label="Prezzo in euro"><span class="euro">€</span>
+        </label>
         <button type="button" class="btn" data-act="chiedi" data-pulsante="chiedi"${pronto ? '' : ' disabled'}>Posso comprarlo?</button>
-      </section>
-
-      ${v ? `<section class="verdetto ${v.ok ? 'si' : 'no'}" aria-live="polite" id="verdetto">
-        ${v.ok ? ICONA.si : ICONA.no}
-        <div class="colonna">
-          <span class="titolo-v">${v.titolo}</span>
-          <span class="nota">${esc(v.motivo)}</span>
-          <button type="button" class="link" data-act="registra">${v.ok ? "L'ho comprato, registra la spesa" : 'Lo compro lo stesso'}</button>
-        </div>
-      </section>` : ''}`;
+        ${v ? `<div class="verdetto ${v.ok ? 'si' : 'no'}" aria-live="polite" id="verdetto">
+          ${v.ok ? ICONA.si : ICONA.no}
+          <div class="colonna">
+            <span class="titolo-v">${v.titolo}</span>
+            <span class="nota">${esc(v.motivo)}</span>
+            <button type="button" class="link" data-act="registra">${v.ok ? "L'ho comprato, registra la spesa" : 'Lo compro lo stesso'}</button>
+          </div>
+        </div>` : ''}
+      </section>`;
   }
 
   function viewRiepilogo() {
@@ -334,6 +333,15 @@
           </ul>
         </div>
         ${C.entrate() <= 0 ? '<p class="nota">Registra lo stipendio di questo mese per vedere come si divide.</p>' : ''}
+      </section>
+
+      <section class="vetro" aria-labelledby="t-pac">
+        <h2 id="t-pac">Piano di accumulo</h2>
+        <div class="griglia3">
+          <div class="mini"><span>Rata mensile</span><strong>${eur(D.pac)}</strong></div>
+          <div class="mini"><span>Versato finora</span><strong style="color: var(--verde)" data-conta="versato" data-valore="${C.versatoPac()}">${eur(C.versatoPac())}</strong></div>
+          <div class="mini"><span>13ª e 14ª</span><strong>${eur(C.extraAnno())}</strong></div>
+        </div>
         ${pacMancante ? `<button type="button" class="btn-sec" data-act="registra-pac">Registra la rata PAC di questo mese (${eur(D.pac)})</button>` : ''}
       </section>
 
@@ -352,15 +360,6 @@
         <div class="colonna"><span class="titolo-a">Sigarette in un anno</span><span class="nota">A questo ritmo: ${eur(sigMese)} al mese</span></div>
         <span class="cifra" data-conta="sigarette" data-formato="0" data-valore="${sigMese * 12}">${eur0(sigMese * 12)}</span>
       </section>` : ''}
-
-      <section class="vetro" aria-labelledby="t-pac">
-        <h2 id="t-pac">Piano di accumulo</h2>
-        <div class="griglia3">
-          <div class="mini"><span>Rata mensile</span><strong>${eur(D.pac)}</strong></div>
-          <div class="mini"><span>Versato finora</span><strong style="color: var(--verde)" data-conta="versato" data-valore="${C.versatoPac()}">${eur(C.versatoPac())}</strong></div>
-          <div class="mini"><span>13ª e 14ª</span><strong>${eur(C.extraAnno())}</strong></div>
-        </div>
-      </section>
 
       <button type="button" class="vetro vai-movimenti" data-act="tab" data-id="movimenti">
         <span class="colonna"><span class="principale">Movimenti del mese</span><span class="nota">${ultime.length} ${ultime.length === 1 ? 'movimento' : 'movimenti'} · vedi e cancella</span></span>
@@ -434,10 +433,6 @@
           ${voci.length ? `<button type="button" class="link" data-act="seleziona">${sel ? 'Fine' : 'Seleziona'}</button>` : ''}
         </div>
         <div class="pillole" role="group" aria-label="Mostra">${filtro('tutti', 'Tutti')}${filtro('spese', 'Spese')}${filtro('entrate', 'Entrate')}${filtro('risparmi', 'PAC')}</div>
-        ${sel && voci.length ? `<div class="barra-selezione">
-          <button type="button" class="link" data-act="seleziona-tutti">${nSel === voci.length ? 'Deseleziona tutti' : 'Seleziona tutti'}</button>
-          <button type="button" class="btn-pericolo" data-act="elimina-selezionati" data-pulsante="selezionati"${nSel ? '' : ' disabled'}>Elimina <span data-conta-sel>${nSel}</span></button>
-        </div>` : ''}
         ${voci.length ? gruppi.map((g) => `<div class="giorno">
           <h3 class="giorno-titolo">${esc(g.titolo)}</h3>
           <ul class="lista">${g.voci.map((v) => `<li class="voce-lista${sel && sel.has(v.id) ? ' scelta' : ''}">
@@ -447,6 +442,10 @@
             ${sel ? '' : `<button type="button" class="x" data-act="elimina-mov" data-id="${v.id}" data-tipo="${v.tipo}" aria-label="Elimina ${esc(v.titolo)} di ${eur(v.importo)}">${ICONA.x}</button>`}
           </li>`).join('')}</ul>
         </div>`).join('') : `<p class="nota">${tutte.length ? 'Nessun movimento di questo tipo.' : 'Nessun movimento in questo mese.'}</p>`}
+        ${sel && voci.length ? `<div class="barra-selezione">
+          <button type="button" class="link" data-act="seleziona-tutti">${nSel === voci.length ? 'Deseleziona tutti' : 'Seleziona tutti'}</button>
+          <button type="button" class="btn-pericolo" data-act="elimina-selezionati" data-pulsante="selezionati"${nSel ? '' : ' disabled'}>Elimina <span data-conta-sel>${nSel}</span></button>
+        </div>` : ''}
       </section>`;
   }
 
@@ -458,6 +457,7 @@
       <input type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(valore)}" data-campo="${campo}" ${extraAttr || ''}><span class="euro">€</span></label>`;
 
     return `${testata('Il tuo mese', 'Impostazioni')}
+      <h2 class="gruppo-titolo">Entrate</h2>
       <section class="vetro" aria-labelledby="t-arrivato">
         <h2 id="t-arrivato">È arrivato lo stipendio?</h2>
         <label class="campo"><span class="nome-campo">Importo</span>
@@ -467,14 +467,6 @@
         <p class="nota">${stipendiMese.length
           ? `Questo mese hai registrato ${stipendiMese.map((e) => `${eur(e.importo)} il ${giorno.format(new Date(e.data))}`).join(' e ')}. Per correggerlo, cancellalo da Movimenti.`
           : 'Lo stipendio non è fisso: registralo ogni mese quando arriva.'}${D.pac > 0 ? ` Insieme allo stipendio viene registrata la rata PAC di ${eur(D.pac)}, come movimento a parte.` : ''}</p>
-      </section>
-
-      <section class="vetro" aria-labelledby="t-fisse">
-        <h2 id="t-fisse">Spese fisse e PAC</h2>
-        ${campoEuro('Spese fisse', 'speseFisse', numero(D.speseFisse))}
-        ${campoEuro('Rata fissa PAC', 'pac', numero(D.pac))}
-        ${campoEuro('PAC già versato', 'pacBase', numero(D.pacTotale))}
-        <p class="nota">Spese fisse: affitto, bollette, abbonamenti. L'app mette da parte il 20% delle entrate più la rata del PAC. "PAC già versato" è quanto avevi prima di usare l'app.</p>
       </section>
 
       <section class="vetro" aria-labelledby="t-extra">
@@ -489,6 +481,15 @@
         ${extraAnno.length ? `<ul class="lista">${extraAnno.map((e) => `<li class="voce-lista"><div class="colonna"><span class="principale">${esc(e.nome)}</span><span class="secondaria">${giorno.format(new Date(e.data))}</span></div><strong>${eur(e.importo)}</strong>
           <button type="button" class="x" data-act="elimina-extra" data-id="${e.id}" aria-label="Elimina ${esc(e.nome)}">${ICONA.x}</button></li>`).join('')}</ul>` : ''}
         <p class="nota">Si sommano alle entrate del mese in cui arrivano.</p>
+      </section>
+
+      <h2 class="gruppo-titolo">Budget</h2>
+      <section class="vetro" aria-labelledby="t-fisse">
+        <h2 id="t-fisse">Spese fisse e PAC</h2>
+        ${campoEuro('Spese fisse', 'speseFisse', numero(D.speseFisse))}
+        ${campoEuro('Rata fissa PAC', 'pac', numero(D.pac))}
+        ${campoEuro('PAC già versato', 'pacBase', numero(D.pacTotale))}
+        <p class="nota">Spese fisse: affitto, bollette, abbonamenti. L'app mette da parte il 20% delle entrate più la rata del PAC. "PAC già versato" è quanto avevi prima di usare l'app.</p>
       </section>
 
       <section class="vetro" aria-labelledby="t-categorie">
@@ -510,6 +511,7 @@
         </div>
       </section>
 
+      <h2 class="gruppo-titolo">Account e dati</h2>
       <section class="vetro" aria-labelledby="t-drive" data-drive-sezione>${sezioneDrive()}</section>
 
       <section class="vetro" aria-labelledby="t-backup">

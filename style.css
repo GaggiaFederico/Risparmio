@@ -54,14 +54,14 @@ button:disabled { cursor: default; }
 .app {
   max-width: 480px;
   margin: 0 auto;
-  padding: calc(env(safe-area-inset-top) + 20px) 20px calc(env(safe-area-inset-bottom) + 112px);
+  padding: calc(env(safe-area-inset-top) + 12px) 20px calc(env(safe-area-inset-bottom) + 112px);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 /* Testata */
-.testata { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding-top: 18px; }
+.testata { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding-top: 8px; }
 .sopra { margin: 0; font-size: 13px; font-weight: 700; color: var(--tenue); letter-spacing: 0.02em; }
 h1 { margin: 0; font-size: 34px; font-weight: 900; letter-spacing: -0.02em; line-height: 1.1; }
 h2 { margin: 0; font-size: 18px; font-weight: 900; }
@@ -82,21 +82,21 @@ h2 { margin: 0; font-size: 18px; font-weight: 900; }
 }
 
 /* Saldo con il cane */
-.saldo { position: relative; margin-top: 52px; gap: 14px; }
+.saldo { position: relative; margin-top: 28px; gap: 10px; padding: 14px 18px; }
 .cane {
   position: absolute;
   right: 12px;
-  top: -64px;
-  width: 132px;
-  height: 172px;
+  top: -40px;
+  width: 110px;
+  height: 140px;
   object-fit: contain;
   object-position: bottom center;
   filter: drop-shadow(0 10px 10px rgba(30, 27, 75, 0.22));
   pointer-events: none;
 }
-.disponibile { display: flex; flex-direction: column; gap: 2px; min-height: 100px; justify-content: flex-end; padding-right: 142px; }
+.disponibile { display: flex; flex-direction: column; gap: 0; min-height: 76px; justify-content: flex-end; padding-right: 118px; }
 .etichetta-piccola { font-size: 13px; font-weight: 700; color: var(--tenue); }
-.cifra-grande { font-size: 44px; font-weight: 900; letter-spacing: -0.03em; line-height: 1.05; color: var(--verde); white-space: nowrap; }
+.cifra-grande { font-size: 40px; font-weight: 900; letter-spacing: -0.03em; line-height: 1.05; color: var(--verde); white-space: nowrap; }
 .cifra-grande.negativa { color: var(--rosso); }
 .cifra-grande.lunga { font-size: 34px; }
 .cifra-grande.vuota { color: #9A9EB5; }
@@ -387,6 +387,22 @@ span.test-icona.attesa { border: 2px solid #C9CCDD; }
 span.test-icona.corso { border: 2.5px solid rgba(79, 70, 229, 0.2); border-top-color: var(--accento); animation: gira 0.8s linear infinite; }
 .test li.ok svg, .test li.ko svg { animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .blocco { align-items: center; z-index: 25; }
+
+/* Titoli dei gruppi in Impostazioni */
+.gruppo-titolo { margin: 12px 6px -2px; font-size: 13px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tenue); }
+.testata + .gruppo-titolo { margin-top: 2px; }
+
+/* Posso?: passi e risposta dentro il riquadro dell'acquisto */
+.saldo .mini { padding: 7px 12px; }
+.saldo .nota { font-size: 12.5px; }
+.compra .campo { min-height: 48px; }
+.compra .btn { min-height: 50px; }
+.saldo .mini strong { font-size: 18px; }
+.compra { gap: 9px; }
+.compra .verdetto { -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+/* Movimenti: la barra Elimina resta a portata di pollice mentre scorri */
+.barra-selezione { position: sticky; bottom: calc(env(safe-area-inset-bottom) + 92px); z-index: 5; padding: 10px 12px; margin: 0 -6px; border-radius: 18px; background: rgba(255, 255, 255, 0.92); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: 0 8px 20px rgba(30, 27, 75, 0.14); }
 .campo-id { align-self: stretch; }
 .link.centrato { align-self: center; }
 .campo-id input { font-size: 16px; }

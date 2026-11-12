@@ -11,24 +11,26 @@ Web app per iPhone che ti dice se puoi permetterti una spesa e ti aiuta a rispar
 ## Cosa fa
 
 ### Posso?
-- Scrivi il prezzo, scegli la categoria e l'app risponde **"Sì, puoi"** o **"No, lascia stare"**, con il motivo.
+- In alto il **disponibile** del mese con il cane, quanto hai **speso** e quanto è **messo da parte**.
+- Sotto, **Cosa vuoi comprare?**: scegli la categoria, scrivi il prezzo e l'app risponde **"Sì, puoi"** o **"No, lascia stare"** con il motivo, subito sotto il bottone. Tutto sta in una schermata, senza scorrere.
 - Il tasto **Sigarette** è il primo e propone già **5,50 €**. Ogni categoria può avere il suo prezzo proposto.
-- In alto vedi il **disponibile** del mese, quanto hai **speso** e quanto è **messo da parte**.
 - Se lo stipendio del mese non è ancora registrato, l'app te lo chiede qui.
 
 ### Riepilogo
 - **Ciambella** con una fetta per ogni categoria in cui hai speso, più spese fisse, rata PAC, risparmio 20% e disponibile, con percentuali e importi.
-- Spese **per categoria**, **sigarette in un anno** a questo ritmo, **piano di accumulo** (rata, versato finora, 13ª e 14ª).
+- Subito sotto il **piano di accumulo** (rata, versato finora, 13ª e 14ª), poi le spese **per categoria** e le **sigarette in un anno** a questo ritmo.
 
 ### Movimenti
 - Tutte le spese, gli stipendi, le rate PAC e le mensilità extra, mese per mese e divise per giorno.
 - Filtri **Tutti / Spese / Entrate / PAC**.
-- Cancelli un movimento con la **×**, oppure tocchi **Seleziona** e ne elimini diversi insieme.
+- Cancelli un movimento con la **×**, oppure tocchi **Seleziona** e ne elimini diversi insieme: la barra **Elimina** resta in basso, a portata di pollice, mentre scorri.
 
 ### Impostazioni
+
+Divise in tre gruppi: **Entrate** (quello che usi ogni mese), **Budget** (da impostare una volta), **Account e dati**.
 - **È arrivato lo stipendio?**: registri lo stipendio quando arriva.
-- **Spese fisse**, **rata fissa PAC** e **PAC già versato** (quanto avevi prima di usare l'app).
 - **13ª e 14ª**, facoltative.
+- **Spese fisse**, **rata fissa PAC** e **PAC già versato** (quanto avevi prima di usare l'app).
 - **Categorie**: essenziale sì/no, limite al mese, prezzo proposto; puoi aggiungerle ed eliminarle.
 - **Google Drive**: account collegato, **Prova collegamento**, **Esci da Google**, **Cambia ID client**.
 - **Backup**: esporta o importa tutti i dati in un file.
