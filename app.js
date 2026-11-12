@@ -141,11 +141,17 @@
     sfiziAOggi() { const { g, tot } = giorniMese(); return this.sfiziMax() * Math.max(g, 7) / tot; },
     usato() { if (this.entrate() <= 0) return 0; const b = this.entrate() - D.speseFisse - this.protetto(); return b > 0 ? Math.min(1, this.speso() / b) : (this.speso() > 0 ? 1 : 0); },
     // 2 = elegante, 1 = normale, 0 = trasandato
+    // Quota del mese già passata (almeno 5 giorni, così all'inizio del mese non scatta subito).
+    tempo() { const { g, tot } = giorniMese(); return Math.max(g, 5) / tot; },
+    // Umore del cane: confronta TUTTO quello che hai speso con il giorno del mese.
+    // 2 = smoking (sei sotto il ritmo), 1 = normale, 0 = trasandato (sopra il ritmo o in rosso).
     umore() {
       if (this.entrate() <= 0) return 1;
-      const atteso = this.sfiziAOggi(), sfizi = this.totEssenziali(false);
-      if (this.disponibile() < 0 || sfizi > atteso * 1.2) return 0;
-      if (sfizi < atteso * 0.7) return 2;
+      if (this.disponibile() < 0) return 0;
+      const usato = this.usato(), tempo = this.tempo();
+      const sfiziTroppi = this.totEssenziali(false) > this.sfiziAOggi() * 1.2;
+      if (usato > tempo * 1.1 + 0.05 || sfiziTroppi) return 0;
+      if (usato < tempo * 0.8) return 2;
       return 1;
     },
     valuta(importo, c) {
@@ -193,11 +199,14 @@
     const pct = Math.round(C.usato() * 100);
     const foto = ['cane_trasandato', 'cane_normale', 'cane_elegante'][u];
     const alt = ['Husky trasandato: stai spendendo troppo', 'Husky: tutto nella norma', 'Husky in smoking: stai risparmiando alla grande'][u];
+    const pctTempo = Math.round(C.tempo() * 100);
     const frase = C.entrate() <= 0
-      ? 'Registra lo stipendio di questo mese per sapere cosa puoi spendere.'
-      : [`Stai spendendo troppo: hai usato il ${pct}% del budget del mese.`,
-         `Tutto nella norma: hai usato il ${pct}% del budget del mese.`,
-         `Stai risparmiando alla grande: hai usato solo il ${pct}% del budget.`][u];
+      ? 'Registra lo stipendio di questo mese: poi il cane ti dice come stai andando.'
+      : disp < 0
+        ? `Sei andato oltre il budget del mese: il cane è trasandato.`
+        : [`Hai usato il ${pct}% del budget, ma il mese è solo al ${pctTempo}%: stai spendendo troppo in fretta.`,
+           `Hai usato il ${pct}% del budget con il mese al ${pctTempo}%: tutto nella norma.`,
+           `Hai usato solo il ${pct}% del budget con il mese al ${pctTempo}%: stai risparmiando alla grande.`][u];
     const senzaStipendio = C.entrate() <= 0;
     const testoDisp = senzaStipendio ? '—' : eur(disp);
     const v = S.verdetto;
