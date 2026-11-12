@@ -20,6 +20,7 @@
   --lilla: #A5B4FC;
   --bordo: #DCDFF0;
   --vetro: rgba(255, 255, 255, 0.66);
+  --accento-testo: #4F46E5;
   color-scheme: light;
 }
 
@@ -315,7 +316,7 @@ h2 { margin: 0; font-size: 18px; font-weight: 900; }
 
 /* Movimenti */
 .mesi { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.mesi h2 { flex: 1; text-align: center; }
+.mesi h2 { flex: 1; text-align: center; font-size: 17px; }
 .x:disabled { opacity: 0.3; }
 .giorno { display: flex; flex-direction: column; gap: 8px; }
 .giorno-titolo { margin: 6px 0 0; font-size: 13px; font-weight: 800; color: var(--tenue); }
@@ -469,6 +470,81 @@ span.test-icona.corso { border: 2.5px solid rgba(79, 70, 229, 0.2); border-top-c
 .modale:not([hidden]) { animation: velo 0.25s ease both; }
 .modale:not([hidden]) .foglio { animation: foglio 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.1) both; }
 
+
+
+/* ---------- Avvisi: risposta "attento" e limiti delle categorie ---------- */
+.verdetto.si svg { color: var(--verde); }
+.verdetto.no svg { color: var(--rosso); }
+.verdetto.attenzione { background: rgba(255, 247, 230, 0.92); border: 1px solid #F5C77A; }
+.verdetto.attenzione svg { color: #B45309; }
+.verdetto.attenzione .titolo-v { color: #92400E; }
+.test li.ok svg { color: var(--verde); }
+.test li.ko svg { color: var(--rosso); }
+.info-limite { margin: 0; padding: 6px 10px; border-radius: 12px; background: rgba(79, 70, 229, 0.08); font-size: 13px; font-weight: 700; color: var(--tenue); }
+.info-limite.vicino { background: rgba(245, 158, 11, 0.16); color: #92400E; }
+.info-limite.superato { background: rgba(239, 68, 68, 0.12); color: var(--rosso-scuro); }
+.su-limite { font-size: 13px; font-weight: 700; color: var(--tenue); }
+.nota-limite { font-size: 12px; font-weight: 800; color: #B45309; }
+.cat-riga.vicino .barra-sottile > span { background: #F59E0B; }
+.cat-riga.superato .barra-sottile > span { background: #EF4444; }
+.cat-riga.superato .nota-limite { color: var(--rosso); }
+
+/* ---------- Modalità scura: segue quella dell'iPhone ---------- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fondo: #0F1020;
+    --testo: #ECEEF8;
+    --tenue: #A6AAC4;
+    --accento: #6366F1;
+    --accento-testo: #A5B4FC;
+    --accento-scuro: #C7D2FE;
+    --verde: #34D399;
+    --teal: #2DD4BF;
+    --rosso: #F87171;
+    --rosso-scuro: #FCA5A5;
+    --ambra: #FBBF24;
+    --lilla: #818CF8;
+    --bordo: rgba(255, 255, 255, 0.12);
+    --vetro: rgba(30, 32, 56, 0.62);
+    color-scheme: dark;
+  }
+  .blob { opacity: 0.22 !important; }
+  .vetro { border-color: rgba(255, 255, 255, 0.08); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
+  .mini, .voce-lista, .riga-cat, .test li, .campo.piccolo, .pillola { background: rgba(255, 255, 255, 0.06); }
+  .campo { background: rgba(255, 255, 255, 0.07); border-color: var(--bordo); }
+  .campo input::placeholder { color: #6B6F8A; }
+  .riga-cat .limite input { background: rgba(255, 255, 255, 0.08); border-color: var(--bordo); }
+  .pillola { border-color: var(--bordo); }
+  .pillola.rapida { border-color: rgba(165, 180, 252, 0.45); }
+  .prezzo-rapido { background: rgba(165, 180, 252, 0.15); color: #C7D2FE; }
+  .btn-sec { background: rgba(99, 102, 241, 0.16); border-color: #818CF8; }
+  .btn-pericolo { background: #DC2626; }
+  .interruttore { background: #3A3D5C; }
+  .barra { background: rgba(129, 140, 248, 0.2); }
+  .barra-sottile { background: rgba(255, 255, 255, 0.08); }
+  .etichetta { background: rgba(45, 212, 191, 0.16); color: #5EEAD4; }
+  .etichetta.grigia { background: rgba(255, 255, 255, 0.08); color: var(--tenue); }
+  .cifra-grande { color: var(--verde); }
+  .cifra-grande.vuota { color: #6B6F8A; }
+  .voce-lista.scelta { background: rgba(99, 102, 241, 0.22); }
+  .verdetto.si { background: rgba(6, 95, 70, 0.35); border-color: rgba(52, 211, 153, 0.4); }
+  .verdetto.no, .avviso, .test li.ko { background: rgba(127, 29, 29, 0.35); border-color: rgba(248, 113, 113, 0.4); }
+  .verdetto.attenzione { background: rgba(120, 53, 15, 0.4); border-color: rgba(251, 191, 36, 0.45); }
+  .verdetto.attenzione svg, .verdetto.attenzione .titolo-v, .nota-limite { color: #FCD34D; }
+  .avviso .cifra { color: #FCA5A5; }
+  .info-limite { background: rgba(255, 255, 255, 0.06); }
+  .info-limite.vicino { background: rgba(120, 53, 15, 0.4); color: #FCD34D; }
+  .info-limite.superato { background: rgba(127, 29, 29, 0.4); color: #FCA5A5; }
+  .tabbar, .chip { background: rgba(30, 32, 56, 0.78); border-color: rgba(255, 255, 255, 0.1); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
+  .chip.attenzione { border-color: rgba(165, 180, 252, 0.5); }
+  .chip.errore { border-color: rgba(248, 113, 113, 0.5); }
+  .barra-selezione { background: rgba(24, 26, 44, 0.92); }
+  .modale { background: rgba(0, 0, 0, 0.55); }
+  .foglio { background: rgba(24, 26, 44, 0.96); }
+  .origine code { background: rgba(255, 255, 255, 0.08); }
+  .toast { background: #ECEEF8; color: #0F1020; }
+  .x:hover { background: rgba(255, 255, 255, 0.08); }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

@@ -137,64 +137,116 @@
 
   function stessoMese(t) { const d = new Date(t), n = new Date(); return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth(); }
   function stessoAnno(t) { return new Date(t).getFullYear() === new Date().getFullYear(); }
-  function giorniMese() { const n = new Date(); return { g: n.getDate(), tot: new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate() }; }
+  const GIORNO = 864e5;
+  const mezzanotte = (t) => { const d = new Date(t); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
 
-  // ---------- Conti (regola 50/30/20) ----------
+  // ---------- Periodo: da uno stipendio al successivo ----------
+  // Lo stipendio arriva in giorni diversi: il "mese" dell'app parte dal giorno in cui lo registri
+  // e continua finché non registri il prossimo. Si stima che arrivi lo stesso giorno del mese dopo.
+  // Senza nessuno stipendio registrato si usa il mese di calendario.
+  function periodo() {
+    const st = D.extra.filter((e) => e.tipo === 'stipendio').sort((a, b) => b.data - a.data)[0];
+    const n = new Date();
+    if (!st) {
+      return { inizio: new Date(n.getFullYear(), n.getMonth(), 1).getTime(), fine: new Date(n.getFullYear(), n.getMonth() + 1, 1).getTime(), stipendio: null };
+    }
+    const d = new Date(st.data);
+    const ultimoGiornoMeseDopo = new Date(d.getFullYear(), d.getMonth() + 2, 0).getDate();
+    const fine = new Date(d.getFullYear(), d.getMonth() + 1, Math.min(d.getDate(), ultimoGiornoMeseDopo)).getTime();
+    return { inizio: mezzanotte(st.data), fine, stipendio: st };
+  }
+  const dentro = (t, p) => t >= p.inizio && (p.stipendio ? true : t < p.fine);
+  // Giorno del periodo (1 = giorno dello stipendio) e lunghezza stimata.
+  function giorniPeriodo() {
+    const p = periodo();
+    const g = Math.floor((mezzanotte(Date.now()) - p.inizio) / GIORNO) + 1;
+    return { g, tot: Math.max(g, Math.round((p.fine - p.inizio) / GIORNO)), p };
+  }
+
+  // ---------- Regole: alzale per un'app più severa, abbassale per una più morbida ----------
+  const REGOLE = {
+    risparmio: 0.20,     // parte delle entrate messa da parte (più la rata PAC)
+    sfizi: 0.20,         // tetto degli sfizi sulle entrate del periodo
+    riserva: 0.10,       // parte del budget spendibile sempre tenuta libera per gli imprevisti
+    ritmo: 1.0,          // tolleranza sul ritmo degli sfizi (1 = nessuna)
+    giorniMinimi: 3,     // all'inizio del periodo il ritmo conta almeno questi giorni
+    quotaAcquisto: 0.5,  // un singolo sfizio non può prendersi più di metà degli sfizi rimasti...
+    sogliaPiccola: 10,   // ...a meno che costi meno di questi euro
+    avvisoLimite: 0.8    // avviso quando una categoria arriva all'80% del suo limite
+  };
+
+  // ---------- Conti ----------
   const C = {
-    speseMese() { return D.spese.filter((s) => stessoMese(s.data)); },
+    speseMese() { const p = periodo(); return D.spese.filter((s) => dentro(s.data, p)); },
     cat(id) { return D.categorie.find((c) => c.id === id); },
     totale(filtro) { return this.speseMese().filter(filtro).reduce((a, s) => a + s.importo, 0); },
     totEssenziali(ess) { return this.totale((s) => { const c = this.cat(s.categoriaID); return c ? c.essenziale === ess : !ess; }); },
     totCategoria(id) { return this.totale((s) => s.categoriaID === id); },
     speso() { return this.totale(() => true); },
-    // Lo stipendio conta solo se lo registri tu, mese per mese.
-    stipendiMese() { return D.extra.filter((e) => e.tipo === 'stipendio' && stessoMese(e.data)).reduce((a, e) => a + e.importo, 0); },
+    entrateDi(tipo) { const p = periodo(); return D.extra.filter((e) => (tipo ? e.tipo === tipo : !e.tipo) && dentro(e.data, p)).reduce((a, e) => a + e.importo, 0); },
+    // Lo stipendio conta solo se lo registri tu.
+    stipendiMese() { return this.entrateDi('stipendio'); },
     // 13ª e 14ª (né stipendio né rata PAC)
-    extraMese() { return D.extra.filter((e) => !e.tipo && stessoMese(e.data)).reduce((a, e) => a + e.importo, 0); },
+    extraMese() { return this.entrateDi(null); },
     extraAnno() { return D.extra.filter((e) => !e.tipo && stessoAnno(e.data)).reduce((a, e) => a + e.importo, 0); },
     // Rata PAC: movimento che si somma ai soldi messi da parte.
-    pacMese() { return D.extra.filter((e) => e.tipo === 'pac' && stessoMese(e.data)).reduce((a, e) => a + e.importo, 0); },
+    pacMese() { return this.entrateDi('pac'); },
     entrate() { return this.stipendiMese() + this.extraMese(); },
-    // Versato nel PAC: quanto avevi già, più la rata di ogni stipendio registrato.
     versatoPac() { return D.pacTotale + D.extra.filter((e) => e.tipo === 'pac').reduce((a, e) => a + e.importo, 0); },
     ultimoStipendio() { const s = D.extra.filter((e) => e.tipo === 'stipendio').sort((a, b) => b.data - a.data)[0]; return s ? s.importo : 0; },
-    risparmio() { return this.entrate() * 0.2; },
-    // La rata del PAC conta già come risparmio.
-    // Messi da parte: il 20% delle entrate PIÙ la rata PAC del mese.
-    protetto() { return this.risparmio() + this.pacMese(); },
-    disponibile() { return this.entrate() - this.protetto() - D.speseFisse - this.speso(); },
-    sfiziMax() { return Math.max(0, Math.min(this.entrate() * 0.3, this.entrate() * 0.8 - D.speseFisse - this.totEssenziali(true))); },
-    // Quanto potresti aver speso in sfizi a oggi (almeno una settimana di budget).
-    sfiziAOggi() { const { g, tot } = giorniMese(); return this.sfiziMax() * Math.max(g, 7) / tot; },
-    usato() { if (this.entrate() <= 0) return 0; const b = this.entrate() - D.speseFisse - this.protetto(); return b > 0 ? Math.min(1, this.speso() / b) : (this.speso() > 0 ? 1 : 0); },
-    // 2 = elegante, 1 = normale, 0 = trasandato
-    // Quota del mese già passata (almeno 5 giorni, così all'inizio del mese non scatta subito).
-    tempo() { const { g, tot } = giorniMese(); return Math.max(g, 5) / tot; },
-    // Umore del cane: confronta TUTTO quello che hai speso con il giorno del mese.
-    // 2 = smoking (sei sotto il ritmo), 1 = normale, 0 = trasandato (sopra il ritmo o in rosso).
+    risparmio() { return this.entrate() * REGOLE.risparmio; },
+    // Rata PAC tenuta da parte: quella registrata nel periodo; se manca ma lo stipendio c'è,
+    // si tiene comunque da parte la rata impostata (il PAC è sempre compreso).
+    pacDaParte() { const reg = this.pacMese(); return reg > 0 ? reg : (this.stipendiMese() > 0 ? D.pac : 0); },
+    // Messi da parte: il 20% delle entrate PIÙ la rata PAC.
+    protetto() { return this.risparmio() + this.pacDaParte(); },
+    budget() { return this.entrate() - this.protetto() - D.speseFisse; },
+    riserva() { return Math.max(0, this.budget() * REGOLE.riserva); },
+    disponibile() { return this.budget() - this.speso(); },
+    sfiziMax() { return Math.max(0, Math.min(this.entrate() * REGOLE.sfizi, this.budget() - this.riserva() - this.totEssenziali(true))); },
+    sfiziRimasti() { return Math.max(0, this.sfiziMax() - this.totEssenziali(false)); },
+    // Sfizi che potresti aver speso fino a oggi, al ritmo giusto.
+    sfiziAOggi() { const { g, tot } = giorniPeriodo(); return this.sfiziMax() * Math.min(1, Math.max(g, REGOLE.giorniMinimi) / tot); },
+    usato() { if (this.entrate() <= 0) return 0; const b = this.budget(); return b > 0 ? Math.min(1, this.speso() / b) : (this.speso() > 0 ? 1 : 0); },
+    // Parte del periodo già passata.
+    tempo() { const { g, tot } = giorniPeriodo(); return Math.min(1, Math.max(g, REGOLE.giorniMinimi) / tot); },
+    // Umore del cane: 2 = smoking (ben sotto il ritmo), 1 = normale, 0 = trasandato (sopra il ritmo o in rosso).
     umore() {
       if (this.entrate() <= 0) return 1;
       if (this.disponibile() < 0) return 0;
       const usato = this.usato(), tempo = this.tempo();
-      const sfiziTroppi = this.totEssenziali(false) > this.sfiziAOggi() * 1.2;
-      if (usato > tempo * 1.1 + 0.05 || sfiziTroppi) return 0;
-      if (usato < tempo * 0.8) return 2;
+      if (usato > tempo + 0.03 || this.totEssenziali(false) > this.sfiziAOggi() * REGOLE.ritmo) return 0;
+      if (usato < tempo * 0.7) return 2;
       return 1;
+    },
+    // Avviso sul limite della categoria (null se non c'è limite).
+    statoLimite(c, extra) {
+      if (!(c && c.limite > 0)) return null;
+      const tot = this.totCategoria(c.id) + (extra || 0);
+      return { tot, limite: c.limite, quota: tot / c.limite };
     },
     valuta(importo, c) {
       const disp = this.disponibile();
+      const riserva = this.riserva();
       const no = (motivo) => ({ ok: false, titolo: 'No, lascia stare', motivo });
-      if (this.entrate() <= 0 && !c.essenziale) return { ok: false, titolo: 'Aspetta lo stipendio', motivo: 'Registra prima lo stipendio di questo mese: senza, non so quanto puoi spendere.' };
+      if (this.entrate() <= 0 && !c.essenziale) return { ok: false, titolo: 'Aspetta lo stipendio', motivo: 'Registra prima lo stipendio: senza, non so quanto puoi spendere.' };
       if (c.essenziale) {
-        return importo <= disp
-          ? { ok: true, titolo: 'Sì, puoi', motivo: 'È una spesa essenziale.' }
-          : { ok: true, titolo: 'Sì, è essenziale', motivo: 'Fallo pure, ma questo mese intacchi il risparmio.' };
+        if (importo > disp) return { ok: true, avviso: true, titolo: 'Sì, ma solo questa', motivo: 'È essenziale, però così intacchi i risparmi: rimanda tutto il resto fino allo stipendio.' };
+        if (disp - importo < riserva) return { ok: true, avviso: true, titolo: 'Sì, ma ti resta poco', motivo: `È essenziale. Dopo restano ${eur(disp - importo)} fino al prossimo stipendio: niente sfizi.` };
+        return { ok: true, titolo: 'Sì, puoi', motivo: 'È una spesa essenziale.' };
       }
+      const sfizi = this.totEssenziali(false);
+      const rimasti = this.sfiziRimasti();
       if (importo > disp) return no('Andresti a toccare i risparmi.');
-      if (importo > this.sfiziMax() - this.totEssenziali(false)) return no('Hai finito il budget per gli sfizi di questo mese.');
-      if (this.totEssenziali(false) + importo > this.sfiziAOggi() * 1.2) return no('Stai spendendo troppo in fretta: aspetta qualche giorno.');
-      if (c.limite > 0 && this.totCategoria(c.id) + importo > c.limite) return no(`Superi il limite che hai messo per ${c.nome}.`);
-      return { ok: true, titolo: 'Sì, puoi', motivo: `Dopo l'acquisto ti restano ${eur(disp - importo)} da spendere questo mese.` };
+      if (importo > disp - riserva) return no(`Ti resterebbe meno della riserva per gli imprevisti (${eur(riserva)}).`);
+      if (importo > rimasti) return no(rimasti > 0 ? `Per gli sfizi ti restano solo ${eur(rimasti)} fino al prossimo stipendio.` : 'Hai finito il budget per gli sfizi fino al prossimo stipendio.');
+      const aOggi = this.sfiziAOggi() * REGOLE.ritmo;
+      if (sfizi + importo > aOggi) return no(`Stai spendendo troppo in fretta: per ora puoi permetterti sfizi fino a ${eur(Math.max(0, aOggi - sfizi))}.`);
+      if (importo > REGOLE.sogliaPiccola && importo > rimasti * REGOLE.quotaAcquisto) return no(`Ti prenderesti più di metà degli sfizi rimasti (${eur(rimasti)}). Pensaci un giorno.`);
+      const lim = this.statoLimite(c, importo);
+      if (lim && lim.quota > 1) return no(`Superi il limite di ${c.nome}: arriveresti a ${eur(lim.tot)} su ${eur(lim.limite)}.`);
+      if (lim && lim.quota >= REGOLE.avvisoLimite) return { ok: true, avviso: true, titolo: 'Sì, ma attento', motivo: `Con questo arrivi a ${eur(lim.tot)} su ${eur(lim.limite)} di ${c.nome} (${Math.round(lim.quota * 100)}% del limite).` };
+      return { ok: true, titolo: 'Sì, puoi', motivo: `Dopo l'acquisto: ${eur(disp - importo)} disponibili e ${eur(rimasti - importo)} di sfizi fino al prossimo stipendio.` };
     }
   };
 
@@ -207,8 +259,9 @@
   // ---------- Icone ----------
   const ICONA = {
     x: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
-    no: '<svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#B42329" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>',
-    si: '<svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0B7A6E" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>',
+    no: '<svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>',
+    si: '<svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>',
+    attenzione: '<svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5L2.5 20h19z"/><path d="M12 10v4.5M12 17.5h.01"/></svg>',
     nuvola: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5z"/></svg>'
   };
 
@@ -219,8 +272,11 @@
   }
 
   function viewPosso() {
-    const { g, tot } = giorniMese();
-    const mese = maiuscola(new Intl.DateTimeFormat('it-IT', { month: 'long' }).format(new Date()));
+    const { g, tot, p } = giorniPeriodo();
+    const fData = new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short' });
+    const sopra = p.stipendio
+      ? `Giorno ${g} · stipendio del ${fData.format(new Date(p.stipendio.data))}`
+      : `${maiuscola(new Intl.DateTimeFormat('it-IT', { month: 'long' }).format(new Date()))} · giorno ${g} di ${tot}`;
     const disp = C.disponibile();
     const u = C.umore();
     const pct = Math.round(C.usato() * 100);
@@ -228,27 +284,31 @@
     const alt = ['Husky trasandato: stai spendendo troppo', 'Husky: tutto nella norma', 'Husky in smoking: stai risparmiando alla grande'][u];
     const pctTempo = Math.round(C.tempo() * 100);
     const frase = C.entrate() <= 0
-      ? 'Registra lo stipendio di questo mese: poi il cane ti dice come stai andando.'
+      ? 'Registra lo stipendio: poi il cane ti dice come stai andando.'
       : disp < 0
-        ? `Sei andato oltre il budget del mese: il cane è trasandato.`
-        : [`Hai usato il ${pct}% del budget, ma il mese è solo al ${pctTempo}%: stai spendendo troppo in fretta.`,
-           `Hai usato il ${pct}% del budget con il mese al ${pctTempo}%: tutto nella norma.`,
-           `Hai usato solo il ${pct}% del budget con il mese al ${pctTempo}%: stai risparmiando alla grande.`][u];
+        ? 'Sei andato oltre il budget fino al prossimo stipendio: il cane è trasandato.'
+        : [`Hai usato il ${pct}% del budget, ma sei solo al ${pctTempo}% dei giorni fino allo stipendio: stai spendendo troppo in fretta.`,
+           `Hai usato il ${pct}% del budget e sei al ${pctTempo}% dei giorni fino allo stipendio: tutto nella norma.`,
+           `Hai usato solo il ${pct}% del budget e sei al ${pctTempo}% dei giorni fino allo stipendio: stai risparmiando alla grande.`][u];
     const senzaStipendio = C.entrate() <= 0;
     const testoDisp = senzaStipendio ? '—' : eur(disp);
     const v = S.verdetto;
     const pronto = parseEuro(S.prezzo) > 0 && C.cat(S.catId);
     S.umorePrec = u;
+    const catScelta = C.cat(S.catId);
+    const lim = C.statoLimite(catScelta);
+    const infoLimite = lim ? `<p class="info-limite${lim.quota >= 1 ? ' superato' : lim.quota >= REGOLE.avvisoLimite ? ' vicino' : ''}">${esc(catScelta.nome)}: ${eur(lim.tot)} su ${eur(lim.limite)} di limite (${Math.round(lim.quota * 100)}%)${lim.quota >= 1 ? ' · limite raggiunto' : lim.quota >= REGOLE.avvisoLimite ? ' · quasi al limite' : ''}</p>` : '';
 
-    const chiediStipendio = C.stipendiMese() <= 0 ? `<section class="vetro stipendio-mese" aria-labelledby="t-stip-mese">
-        <h2 id="t-stip-mese">È arrivato lo stipendio di ${mese.toLowerCase()}?</h2>
+    const chiediStipendio = (!p.stipendio || g >= tot - 3) ? `<section class="vetro stipendio-mese" aria-labelledby="t-stip-mese">
+        <h2 id="t-stip-mese">${p.stipendio ? 'È arrivato il nuovo stipendio?' : 'È arrivato lo stipendio?'}</h2>
+        ${p.stipendio ? '<p class="nota">Quando lo registri, inizia un nuovo periodo.</p>' : ''}
         <label class="campo"><span class="nome-campo">Importo</span>
           <input type="text" inputmode="decimal" autocomplete="off" placeholder="${esc(numero(C.ultimoStipendio()) || '0')}" value="${esc(S.stipendioArr)}" data-campo="stipendioArr" aria-label="Importo dello stipendio arrivato"><span class="euro">€</span>
         </label>
         <button type="button" class="btn" data-act="stipendio" data-pulsante="stipendio"${parseEuro(S.stipendioArr) > 0 ? '' : ' disabled'}>Registra stipendio</button>
       </section>` : '';
 
-    return `${testata(`${mese} · giorno ${g} di ${tot}`, 'Posso?')}
+    return `${testata(sopra, 'Posso?')}
       ${chiediStipendio}
       <section class="vetro saldo" aria-label="Saldo del mese">
         <img class="cane${S.umorePrec !== undefined && S.umorePrec !== u ? ' cambia' : ''}" src="img/${foto}.png" alt="${alt}">
@@ -258,7 +318,7 @@
         </div>
         <div class="griglia2">
           <div class="mini"><span>Speso</span><strong data-conta="speso" data-valore="${C.speso()}">${eur(C.speso())}</strong></div>
-          <div class="mini"><span>Messi da parte</span><strong style="color: var(--accento)" data-conta="protetto" data-valore="${C.protetto()}">${eur(C.protetto())}</strong></div>
+          <div class="mini"><span>Messi da parte</span><strong style="color: var(--accento-testo)" data-conta="protetto" data-valore="${C.protetto()}">${eur(C.protetto())}</strong></div>
         </div>
         <div class="barra${pct >= 100 ? ' piena' : ''}" role="progressbar" aria-label="Budget usato" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span data-barra="usato" data-pct="${pct}" style="width: ${pct}%"></span></div>
         <p class="nota">${frase}</p>
@@ -269,12 +329,13 @@
         <div class="pillole" role="group" aria-label="Categoria">
           ${D.categorie.slice().sort((a, b) => (b.prezzo > 0) - (a.prezzo > 0)).map((c) => `<button type="button" class="pillola${c.prezzo > 0 ? ' rapida' : ''}" data-act="cat" data-id="${c.id}" aria-pressed="${c.id === S.catId}">${esc(c.nome)}${c.prezzo > 0 ? ` <span class="prezzo-rapido">${eur(c.prezzo)}</span>` : ''}</button>`).join('')}
         </div>
+        ${infoLimite}
         <label class="campo"><span class="nome-campo">Prezzo</span>
           <input type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(S.prezzo)}" data-campo="prezzo" aria-label="Prezzo in euro"><span class="euro">€</span>
         </label>
         <button type="button" class="btn" data-act="chiedi" data-pulsante="chiedi"${pronto ? '' : ' disabled'}>Posso comprarlo?</button>
-        ${v ? `<div class="verdetto ${v.ok ? 'si' : 'no'}" aria-live="polite" id="verdetto">
-          ${v.ok ? ICONA.si : ICONA.no}
+        ${v ? `<div class="verdetto ${v.avviso ? 'attenzione' : v.ok ? 'si' : 'no'}" aria-live="polite" id="verdetto">
+          ${v.avviso ? ICONA.attenzione : v.ok ? ICONA.si : ICONA.no}
           <div class="colonna">
             <span class="titolo-v">${v.titolo}</span>
             <span class="nota">${esc(v.motivo)}</span>
@@ -285,7 +346,10 @@
   }
 
   function viewRiepilogo() {
-    const mese = maiuscola(new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(new Date()));
+    const pr = periodo();
+    const mese = pr.stipendio
+      ? `Dallo stipendio del ${new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short' }).format(new Date(pr.stipendio.data))}`
+      : maiuscola(new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(new Date()));
     // Una fetta per ogni categoria in cui hai speso, poi fisse, PAC, risparmio e disponibile.
     const spesePerCat = D.categorie.map((c) => [c, C.totCategoria(c.id)]).filter(([, t]) => t > 0);
     const altro = C.totale((s) => !C.cat(s.categoriaID));
@@ -293,7 +357,7 @@
       .concat(altro > 0 ? [['Altro', altro, '#94A3B8', 'spesa']] : [])
       .concat([
         ['Spese fisse', D.speseFisse, 'var(--lilla)', 'fisso'],
-        ['Rata PAC', C.pacMese(), 'var(--verde)', 'pac'],
+        ['Rata PAC', C.pacDaParte(), 'var(--verde)', 'pac'],
         ['Risparmio 20%', C.risparmio(), 'var(--ambra)', 'risparmio'],
         ['Disponibile', Math.max(0, C.disponibile()), 'var(--teal)', 'disponibile']
       ]);
@@ -318,7 +382,7 @@
     const massimo = Math.max(1, ...perCat.map(([, t]) => t), senzaCat);
     const sig = D.categorie.find((c) => c.nome.trim().toLowerCase() === 'sigarette');
     const sigMese = sig ? C.totCategoria(sig.id) : 0;
-    const ultime = C.speseMese().concat(D.extra.filter((e) => stessoMese(e.data)));
+    const ultime = C.speseMese().concat(D.extra.filter((e) => dentro(e.data, pr)));
 
     return `${testata(mese, 'Riepilogo')}
       <section class="vetro" aria-labelledby="t-stip">
@@ -332,7 +396,7 @@
             ${inLegenda.map(([n, val, col]) => `<li><span class="quadratino" style="background: ${col}"></span><span class="voce">${esc(n)}</span><span class="pct">${pct(val)}%</span><strong>${eur0(val)}</strong></li>`).join('')}
           </ul>
         </div>
-        ${C.entrate() <= 0 ? '<p class="nota">Registra lo stipendio di questo mese per vedere come si divide.</p>' : ''}
+        ${C.entrate() <= 0 ? '<p class="nota">Registra lo stipendio per vedere come si divide.</p>' : ''}
       </section>
 
       <section class="vetro" aria-labelledby="t-pac">
@@ -348,10 +412,15 @@
       <section class="vetro" aria-labelledby="t-cat">
         <h2 id="t-cat">Per categoria</h2>
         ${perCat.length || senzaCat ? '' : '<p class="nota">Nessuna spesa registrata questo mese.</p>'}
-        ${perCat.map(([c, t]) => `<div class="cat-riga">
-          <div class="cat-testa"><span class="nome">${esc(c.nome)}</span>${c.essenziale ? '<span class="etichetta">Essenziale</span>' : ''}<strong>${eur(t)}</strong></div>
-          <div class="barra-sottile" aria-hidden="true"><span style="width: ${Math.round((t / massimo) * 100)}%; background: ${coloreCat(c)}"></span></div>
-        </div>`).join('')}
+        ${perCat.map(([c, t]) => {
+          const quota = c.limite > 0 ? t / c.limite : 0;
+          const stato = quota >= 1 ? ' superato' : quota >= REGOLE.avvisoLimite ? ' vicino' : '';
+          return `<div class="cat-riga${stato}">
+          <div class="cat-testa"><span class="nome">${esc(c.nome)}</span>${c.essenziale ? '<span class="etichetta">Essenziale</span>' : ''}<strong>${eur(t)}${c.limite > 0 ? `<span class="su-limite"> / ${eur(c.limite)}</span>` : ''}</strong></div>
+          <div class="barra-sottile" aria-hidden="true"><span style="width: ${Math.round(Math.min(1, c.limite > 0 ? quota : t / massimo) * 100)}%; background: ${stato ? '' : coloreCat(c)}"></span></div>
+          ${stato ? `<span class="nota-limite">${quota >= 1 ? 'Limite superato' : `${Math.round(quota * 100)}% del limite`}</span>` : ''}
+        </div>`;
+        }).join('')}
         ${senzaCat ? `<div class="cat-riga"><div class="cat-testa"><span class="nome">Categorie eliminate</span><strong>${eur(senzaCat)}</strong></div>
           <div class="barra-sottile" aria-hidden="true"><span style="width: ${Math.round((senzaCat / massimo) * 100)}%"></span></div></div>` : ''}
       </section>
@@ -375,19 +444,46 @@
   }
 
   // ---------- Movimenti: elenco per mese, con cancellazione ----------
-  function movimentiDelMese(offset) {
+  // Movimenti per periodo: da uno stipendio al successivo (0 = periodo in corso).
+  // Prima del primo stipendio registrato si va per mese di calendario.
+  function periodiMovimenti() {
+    const fd = new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short' });
+    const inizi = D.extra.filter((e) => e.tipo === 'stipendio').map((e) => mezzanotte(e.data)).sort((x, y) => y - x)
+      .filter((t, i, arr) => i === 0 || t !== arr[i - 1]);
+    const lista = inizi.map((inizio, i) => {
+      const fine = i === 0 ? Infinity : inizi[i - 1];
+      const etichetta = i === 0 ? `Dal ${fd.format(new Date(inizio))} a oggi` : `${fd.format(new Date(inizio))} – ${fd.format(new Date(fine - GIORNO))}`;
+      return { inizio, fine, etichetta };
+    });
+    // Prima del primo stipendio: mesi di calendario, fino al movimento più vecchio.
+    const tutti = D.spese.map((x) => x.data).concat(D.extra.map((x) => x.data));
+    const piuVecchio = tutti.length ? Math.min(...tutti) : Date.now();
+    const limite = inizi.length ? inizi[inizi.length - 1] : Infinity;
     const n = new Date();
-    const rif = new Date(n.getFullYear(), n.getMonth() - offset, 1);
-    const nelMese = (t) => { const d = new Date(t); return d.getFullYear() === rif.getFullYear() && d.getMonth() === rif.getMonth(); };
-    const spese = D.spese.filter((s) => nelMese(s.data)).map((s) => {
+    for (let k = 0; k < 120; k++) {
+      const inizio = new Date(n.getFullYear(), n.getMonth() - k, 1).getTime();
+      const fineMese = new Date(n.getFullYear(), n.getMonth() - k + 1, 1).getTime();
+      if (inizio >= limite) continue;
+      if (fineMese <= piuVecchio && lista.length) break;
+      const fine = Math.min(fineMese, limite);
+      lista.push({ inizio, fine, etichetta: fine < fineMese ? `${fd.format(new Date(inizio))} – ${fd.format(new Date(fine - GIORNO))}` : maiuscola(new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(new Date(inizio))) });
+      if (fineMese <= piuVecchio) break;
+    }
+    return lista;
+  }
+  function movimentiDelMese(offset) {
+    const periodi = periodiMovimenti();
+    const per = periodi[Math.min(offset, periodi.length - 1)];
+    const nel = (t) => t >= per.inizio && t < per.fine;
+    const spese = D.spese.filter((s) => nel(s.data)).map((s) => {
       const c = C.cat(s.categoriaID);
       return { id: s.id, tipo: 'spesa', data: s.data, importo: s.importo, titolo: c ? c.nome : 'Senza categoria', nota: s.nota || '' };
     });
-    const extra = D.extra.filter((e) => nelMese(e.data)).map((e) => ({
+    const extra = D.extra.filter((e) => nel(e.data)).map((e) => ({
       id: e.id, tipo: e.tipo === 'pac' ? 'risparmio' : 'entrata', data: e.data, importo: e.importo, titolo: e.nome,
       nota: e.tipo === 'pac' ? 'Messa da parte nel PAC' : e.tipo === 'stipendio' ? '' : 'Mensilità extra'
     }));
-    return { rif, voci: spese.concat(extra).sort((a, b) => b.data - a.data) };
+    return { rif: per, ultimo: offset >= periodi.length - 1, voci: spese.concat(extra).sort((a, b) => b.data - a.data) };
   }
 
   const filtraMov = (v) => S.filtroMov === 'tutti'
@@ -398,7 +494,8 @@
   function viewMovimenti() {
     const { rif, voci: tutte } = movimentiDelMese(S.meseMov);
     const voci = tutte.filter(filtraMov);
-    const nomeMese = maiuscola(new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(rif));
+    const nomeMese = rif.etichetta;
+    const ultimoPeriodo = movimentiDelMese(S.meseMov).ultimo;
     const uscite = tutte.filter((v) => v.tipo === 'spesa').reduce((a, v) => a + v.importo, 0);
     const entrate = tutte.filter((v) => v.tipo === 'entrata').reduce((a, v) => a + v.importo, 0);
     const accantonati = tutte.filter((v) => v.tipo === 'risparmio').reduce((a, v) => a + v.importo, 0);
@@ -416,14 +513,14 @@
     return `${testata('Spese ed entrate', 'Movimenti')}
       <section class="vetro" aria-label="Mese">
         <div class="mesi">
-          <button type="button" class="x" data-act="mese-prec" aria-label="Mese precedente"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+          <button type="button" class="x" data-act="mese-prec" aria-label="Periodo precedente"${ultimoPeriodo ? ' disabled' : ''}><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
           <h2 aria-live="polite">${nomeMese}</h2>
-          <button type="button" class="x" data-act="mese-succ" aria-label="Mese successivo"${S.meseMov === 0 ? ' disabled' : ''}><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button type="button" class="x" data-act="mese-succ" aria-label="Periodo successivo"${S.meseMov === 0 ? ' disabled' : ''}><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
         </div>
         <div class="griglia3">
           <div class="mini"><span>Uscite</span><strong data-conta="mov-uscite" data-valore="${uscite}">${eur(uscite)}</strong></div>
           <div class="mini"><span>Entrate</span><strong style="color: var(--verde)" data-conta="mov-entrate" data-valore="${entrate}">${eur(entrate)}</strong></div>
-          <div class="mini"><span>Nel PAC</span><strong style="color: var(--accento)" data-conta="mov-pac" data-valore="${accantonati}">${eur(accantonati)}</strong></div>
+          <div class="mini"><span>Nel PAC</span><strong style="color: var(--accento-testo)" data-conta="mov-pac" data-valore="${accantonati}">${eur(accantonati)}</strong></div>
         </div>
       </section>
 
@@ -451,7 +548,8 @@
 
   function viewImpostazioni() {
     const extraAnno = D.extra.filter((e) => !e.tipo && stessoAnno(e.data)).sort((a, b) => b.data - a.data);
-    const stipendiMese = D.extra.filter((e) => e.tipo === 'stipendio' && stessoMese(e.data)).sort((a, b) => b.data - a.data);
+    const pi = periodo();
+    const stipendiMese = D.extra.filter((e) => e.tipo === 'stipendio' && dentro(e.data, pi)).sort((a, b) => b.data - a.data);
     const giorno = new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short' });
     const campoEuro = (nome, campo, valore, extraAttr) => `<label class="campo piccolo"><span class="nome-campo">${nome}</span>
       <input type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(valore)}" data-campo="${campo}" ${extraAttr || ''}><span class="euro">€</span></label>`;
@@ -465,8 +563,8 @@
         </label>
         <button type="button" class="btn" data-act="stipendio" data-pulsante="stipendio"${parseEuro(S.stipendioArr) > 0 ? '' : ' disabled'}>Registra stipendio</button>
         <p class="nota">${stipendiMese.length
-          ? `Questo mese hai registrato ${stipendiMese.map((e) => `${eur(e.importo)} il ${giorno.format(new Date(e.data))}`).join(' e ')}. Per correggerlo, cancellalo da Movimenti.`
-          : 'Lo stipendio non è fisso: registralo ogni mese quando arriva.'}${D.pac > 0 ? ` Insieme allo stipendio viene registrata la rata PAC di ${eur(D.pac)}, come movimento a parte.` : ''}</p>
+          ? `Ultimo stipendio: ${stipendiMese.map((e) => `${eur(e.importo)} il ${giorno.format(new Date(e.data))}`).join(' e ')}. Il periodo dura finché non registri il prossimo, in qualunque giorno arrivi. Per correggerlo, cancellalo da Movimenti.`
+          : 'Lo stipendio non è fisso: registralo quando arriva, nel giorno in cui arriva. Da lì parte il periodo.'}${D.pac > 0 ? ` Insieme allo stipendio viene registrata la rata PAC di ${eur(D.pac)}, come movimento a parte.` : ''}</p>
       </section>
 
       <section class="vetro" aria-labelledby="t-extra">
@@ -489,7 +587,7 @@
         ${campoEuro('Spese fisse', 'speseFisse', numero(D.speseFisse))}
         ${campoEuro('Rata fissa PAC', 'pac', numero(D.pac))}
         ${campoEuro('PAC già versato', 'pacBase', numero(D.pacTotale))}
-        <p class="nota">Spese fisse: affitto, bollette, abbonamenti. L'app mette da parte il 20% delle entrate più la rata del PAC. "PAC già versato" è quanto avevi prima di usare l'app.</p>
+        <p class="nota">Spese fisse: affitto, bollette, abbonamenti. L'app mette da parte il 20% delle entrate più la rata del PAC, e tiene il 10% del resto come riserva per gli imprevisti. "PAC già versato" è quanto avevi prima di usare l'app.</p>
       </section>
 
       <section class="vetro" aria-labelledby="t-categorie">
@@ -528,8 +626,8 @@
   const ICONA_TEST = {
     attesa: '<span class="test-icona attesa" aria-hidden="true"></span>',
     corso: '<span class="test-icona corso" aria-hidden="true"></span>',
-    ok: '<svg class="test-icona" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0B7A6E" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
-    ko: '<svg class="test-icona" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B42329" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+    ok: '<svg class="test-icona" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    ko: '<svg class="test-icona" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'
   };
   const TESTO_TEST = { attesa: 'in attesa', corso: 'in corso', ok: 'riuscito', ko: 'non riuscito' };
   function listaTest() {
@@ -675,7 +773,7 @@
 
   // ---------- Azioni ----------
   const azioni = {
-    tab(el, id) { S.tab = id; render(); window.scrollTo(0, 0); },
+    tab(el, id) { if (id !== S.tab) { S.meseMov = 0; S.selezione = null; } S.tab = id; render(); window.scrollTo(0, 0); },
     cat(el, id) {
       const c = C.cat(id);
       // Categoria con prezzo proposto: lo scrive lei se il prezzo è vuoto o era quello proposto da un'altra.
@@ -703,7 +801,7 @@
       salva(); render();
       toast(`Registrati ${eur(imp)} in ${c.nome}`);
     },
-    'mese-prec'() { S.meseMov++; S.selezione = null; render(); },
+    'mese-prec'() { if (!movimentiDelMese(S.meseMov).ultimo) { S.meseMov++; S.selezione = null; render(); } },
     'mese-succ'() { if (S.meseMov > 0) { S.meseMov--; S.selezione = null; render(); } },
     'filtro-mov'(el, id) { S.filtroMov = id; if (S.selezione) S.selezione.clear(); render(); },
     seleziona() { S.selezione = S.selezione ? null : new Set(); render(); },
@@ -742,7 +840,7 @@
     },
     'registra-pac'() {
       if (!(D.pac > 0)) return;
-      const st = D.extra.filter((e) => e.tipo === 'stipendio' && stessoMese(e.data)).sort((a, b) => b.data - a.data)[0];
+      const st = periodo().stipendio;
       D.extra.push({ id: `${uid()}-pac`, tipo: 'pac', nome: 'Rata PAC', importo: D.pac, rif: st ? st.id : undefined, data: Date.now() });
       salva(); render();
       toast(`Rata PAC registrata: ${eur(D.pac)}`);

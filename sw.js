@@ -2,7 +2,7 @@
 // Prima prova sempre il sito (così vedi subito la versione nuova); la copia salvata
 // serve solo se manca la rete, per mostrare l'app mentre si ricollega.
 // Quando cambi i file sul sito, aumenta il numero di VERSIONE.
-const VERSIONE = 'risparmio-v14';
+const VERSIONE = 'risparmio-v16';
 const FILE = [
   './', './index.html', './style.css', './app.js', './config.js', './manifest.webmanifest',
   './font/nunito.woff2',

@@ -17,11 +17,11 @@ Web app per iPhone che ti dice se puoi permetterti una spesa e ti aiuta a rispar
 - Se lo stipendio del mese non è ancora registrato, l'app te lo chiede qui.
 
 ### Riepilogo
-- **Ciambella** con una fetta per ogni categoria in cui hai speso, più spese fisse, rata PAC, risparmio 20% e disponibile, con percentuali e importi.
+- **Ciambella** del periodo in corso con una fetta per ogni categoria in cui hai speso, più spese fisse, rata PAC, risparmio 20% e disponibile, con percentuali e importi.
 - Subito sotto il **piano di accumulo** (rata, versato finora, 13ª e 14ª), poi le spese **per categoria** e le **sigarette in un anno** a questo ritmo.
 
 ### Movimenti
-- Tutte le spese, gli stipendi, le rate PAC e le mensilità extra, mese per mese e divise per giorno.
+- Tutte le spese, gli stipendi, le rate PAC e le mensilità extra, **da stipendio a stipendio** e divise per giorno.
 - Filtri **Tutti / Spese / Entrate / PAC**.
 - Cancelli un movimento con la **×**, oppure tocchi **Seleziona** e ne elimini diversi insieme: la barra **Elimina** resta in basso, a portata di pollice, mentre scorri.
 
@@ -37,27 +37,54 @@ Divise in tre gruppi: **Entrate** (quello che usi ogni mese), **Budget** (da imp
 
 ## Come ragiona
 
+### Il periodo va da stipendio a stipendio
+
+Lo stipendio arriva in giorni diversi. Il "mese" dell'app parte dal giorno in cui registri lo stipendio e dura finché non registri il successivo, qualunque giorno arrivi. Per il ritmo di spesa l'app stima che il prossimo arrivi lo stesso giorno del mese dopo; verso la fine del periodo Posso? ti chiede se è arrivato. Prima del primo stipendio registrato si usa il mese di calendario. Anche Movimenti scorre per periodi.
+
+### I conti
+
 | Voce | Regola |
 | --- | --- |
-| Entrate del mese | Stipendi registrati nel mese + 13ª/14ª arrivate nel mese. Lo stipendio è **sempre manuale**: non esiste uno stipendio fisso. |
-| Messi da parte | **20% delle entrate + rata PAC** del mese. |
-| Disponibile | Entrate − messi da parte − spese fisse − speso. |
-| Rata PAC | Quando registri lo stipendio si crea anche il movimento "Rata PAC". Cancellando lo stipendio si toglie anche la sua rata. Se manca, il Riepilogo offre di registrarla. |
-| Spese essenziali | Benzina, Macchina, Spesa alimentare, Medicine: sempre approvate (con avviso se intaccano il risparmio). |
-| Sfizi | Approvati solo se c'è disponibile, restano dentro il 30% delle entrate, non vai troppo veloce rispetto al giorno del mese e non superi il limite della categoria. |
-| Senza stipendio | Il disponibile resta vuoto e gli sfizi ricevono "Aspetta lo stipendio". |
+| Entrate | Stipendio del periodo + 13ª/14ª arrivate nel periodo. Lo stipendio è **sempre manuale**. |
+| Messi da parte | **20% delle entrate + rata PAC**. Se la rata non è ancora registrata, viene tenuta da parte comunque. |
+| Budget | Entrate − messi da parte − spese fisse. |
+| Riserva | Il **10% del budget** resta sempre libero per gli imprevisti: gli sfizi non lo toccano. |
+| Disponibile | Budget − speso nel periodo. |
+| Sfizi | Al massimo il **20% delle entrate** (e mai oltre budget − riserva − spese essenziali). |
+
+### Le risposte (severe)
+
+| Spesa | Risposta |
+| --- | --- |
+| Essenziale (Benzina, Macchina, Spesa alimentare, Medicine) | **Sì**. Se ti lascia sotto la riserva: "Sì, ma ti resta poco". Se va oltre il disponibile: "Sì, ma solo questa". |
+| Sfizio che tocca i risparmi o la riserva | **No** |
+| Sfizio oltre gli sfizi rimasti | **No** |
+| Sfizio più veloce del ritmo (sfizi spesi > quota dei giorni passati) | **No**, con quanto puoi spendere per ora |
+| Sfizio sopra i 10 € che prende più di metà degli sfizi rimasti | **No**, "pensaci un giorno" |
+| Sfizio che supera il limite della categoria | **No** |
+| Sfizio che porta la categoria oltre l'**80% del limite** | **"Sì, ma attento"**, in giallo |
+| Senza stipendio registrato | Gli sfizi ricevono "Aspetta lo stipendio" |
+
+Scegliendo una categoria con limite, Posso? mostra subito quanto ne hai usato. Nel Riepilogo le categorie vicine al limite diventano gialle, quelle oltre rosse.
+
+Le soglie stanno tutte nell'oggetto `REGOLE` in `app.js`: alzale per un'app più severa, abbassale per una più morbida.
 
 ### Il cane
 
-Confronta la parte di budget già usata con la parte di mese già passata:
+Confronta la parte di budget usata con la parte di periodo passata:
 
 | Husky | Quando |
 | --- | --- |
-| In smoking | Hai usato meno budget di quanto mese è passato (meno dell'80% del ritmo). |
-| Normale | Sei in linea con il mese. |
-| Trasandato | Spendi più in fretta del mese, sei in rosso, o esageri con gli sfizi. |
+| In smoking | Hai usato meno del 70% di quanto il periodo è avanzato. |
+| Normale | Sei in linea. |
+| Trasandato | Spendi più in fretta dei giorni, sei in rosso, o vai oltre il ritmo degli sfizi. |
 
-Sotto la barra l'app scrive il motivo, per esempio "Hai usato il 52% del budget, ma il mese è solo al 40%".
+Sotto la barra l'app scrive il motivo, per esempio "Hai usato il 52% del budget, ma sei solo al 40% dei giorni fino allo stipendio".
+
+## Aspetto
+
+- **Modalità scura automatica:** segue quella dell'iPhone.
+- Animazioni che si spengono con **Riduci movimento**; zoom bloccato.
 
 ## Dati e accesso
 
