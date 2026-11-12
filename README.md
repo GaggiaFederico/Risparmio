@@ -28,15 +28,10 @@ Si installa dalla schermata Home. Nessun server: solo HTML, CSS e JavaScript. Se
 1. Su [Google Cloud Console](https://console.cloud.google.com/) crea un progetto e attiva **Google Drive API**.
 2. Configura la **schermata di consenso OAuth** (tipo Esterno) e aggiungi il tuo Gmail tra gli utenti di test.
 3. Crea un **ID client OAuth** di tipo *Applicazione web*. In **Origini JavaScript autorizzate** scrivi `https://<utente>.github.io` (senza percorso e senza barra finale).
-4. Incolla l'ID client in `config.js`:
+4. Apri l'app: al primo avvio ti chiede l'**ID client**. Incollalo e tocca **Salva e continua**. La stessa schermata ti mostra l'indirizzo da autorizzare, con il tasto **Copia**.
+5. Tocca **Accedi con Google**: parte il test di collegamento e poi si caricano i tuoi dati.
 
-   ```js
-   window.RISPARMIO_CONFIG = { GOOGLE_CLIENT_ID: '1234-abc.apps.googleusercontent.com' };
-   ```
-
-5. Apri l'app e tocca **Accedi con Google**: parte il test di collegamento e poi si caricano i tuoi dati.
-
-Senza Client ID l'app mostra solo la schermata che chiede di configurarlo.
+L'ID client resta solo sul dispositivo dove lo inserisci, quindi il codice pubblicato non contiene niente di tuo. Lo cambi quando vuoi da **Impostazioni → Google Drive → Cambia ID client**. In alternativa puoi scriverlo in `config.js`, così è già pronto per chiunque apra il sito.
 
 L'app chiede solo il permesso `drive.file`: vede esclusivamente il file che crea lei. L'ID client non è un segreto e può stare nel repository pubblico.
 

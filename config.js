@@ -1,6 +1,5 @@
-// Impostazioni di Risparmio.
-// Incolla qui il "Client ID" OAuth creato su Google Cloud (tipo: Applicazione web).
-// Senza Client ID l'app non parte: i dati stanno solo su Google Drive.
+// Facoltativo. L'ID client di Google si inserisce direttamente nell'app al primo avvio
+// e resta solo su quel dispositivo. Mettilo qui solo se vuoi che sia già pronto per tutti.
 window.RISPARMIO_CONFIG = {
   GOOGLE_CLIENT_ID: ''
 };

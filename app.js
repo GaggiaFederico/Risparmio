@@ -11,7 +11,8 @@
     file: 'risparmio.drive.file',
     collegato: 'risparmio.drive.collegato',
     modifiche: 'risparmio.drive.modifiche',
-    ultima: 'risparmio.drive.ultima'
+    ultima: 'risparmio.drive.ultima',
+    clientId: 'risparmio.google.clientId'
   };
 
   // ---------- Memoria del telefono ----------
@@ -158,8 +159,9 @@
   };
 
   // ---------- Stato dello schermo ----------
+  const ID_VALIDO = /^[\w.-]+\.apps\.googleusercontent\.com$/;
   // fase: config (manca il Client ID) · accesso · carico · errore · pronto
-  const S = { fase: 'accesso', test: [], ultimi: {}, vista: null, umorePrec: undefined, tab: 'posso', prezzo: '', catId: null, verdetto: null, stipendioArr: '', extraImp: '', nuovaCat: '', pendente: null, ridisegna: false };
+  const S = { fase: 'accesso', clientId: '', test: [], ultimi: {}, vista: null, umorePrec: undefined, tab: 'posso', prezzo: '', catId: null, verdetto: null, stipendioArr: '', extraImp: '', nuovaCat: '', pendente: null, ridisegna: false };
   const $ = (q) => document.querySelector(q);
 
   // ---------- Icone ----------
@@ -395,7 +397,16 @@
     const f = S.fase;
     let corpo;
     if (f === 'config') {
-      corpo = `<p class="nota">Manca il collegamento a Google. Inserisci il Client ID OAuth nel file <strong>config.js</strong> del sito: le istruzioni sono nel README del progetto.</p>`;
+      const valido = ID_VALIDO.test(S.clientId.trim());
+      corpo = `<p class="nota">Per iniziare collega l'app al tuo progetto Google: incolla qui l'ID client OAuth. Finisce con .apps.googleusercontent.com.</p>
+        <label class="campo piccolo testo campo-id"><span class="nascosto">ID client Google</span>
+          <input type="text" data-campo="clientId" value="${esc(S.clientId)}" placeholder="1234-abc.apps.googleusercontent.com" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="url"></label>
+        <button type="button" class="btn" data-act="salva-client" data-pulsante="clientId"${valido ? '' : ' disabled'}>Salva e continua</button>
+        <div class="origine">
+          <span class="etichetta-piccola">Su Google, in "Origini JavaScript autorizzate", scrivi:</span>
+          <div class="origine-riga"><code>${esc(location.origin)}</code><button type="button" class="btn-sec" data-act="copia-origine">Copia</button></div>
+        </div>
+        <p class="nota">L'ID resta solo su questo dispositivo: non serve metterlo nel codice pubblicato.</p>`;
     } else {
       const bottone = f === 'carico' ? ''
         : `<button type="button" class="btn" data-act="accedi"${Drive.client ? '' : ' disabled'}>${Drive.client ? 'Accedi con Google' : 'Preparo Google…'}</button>`;
@@ -582,6 +593,23 @@
       S.nuovaCat = '';
       salva(); render();
     },
+    'salva-client'() {
+      const id = S.clientId.trim();
+      if (!ID_VALIDO.test(id)) { toast("L'ID client deve finire con .apps.googleusercontent.com"); return; }
+      scrivi(K.clientId, id);
+      location.reload();
+    },
+    'copia-origine'() {
+      const fatto = () => toast('Indirizzo copiato');
+      if (navigator.clipboard) navigator.clipboard.writeText(location.origin).then(fatto).catch(() => toast(location.origin));
+      else toast(location.origin);
+    },
+    'cambia-client'() {
+      if (!confirm("Cambiare l'ID client di Google? Esci da Google e lo inserisci di nuovo. I dati restano su Drive.")) return;
+      Drive.esci();
+      scrivi(K.clientId, null);
+      location.reload();
+    },
     accedi() {
       Drive.accedi().then(apri).catch((e) => {
         toast(e.message === 'nonpronto' ? 'Google non è ancora pronto: riprova tra un attimo' : 'Accesso a Google non riuscito');
@@ -641,6 +669,7 @@
   // Mentre scrivi: niente ridisegno, si aggiornano solo i bottoni.
   function abilita(nome, si) { document.querySelectorAll(`[data-pulsante="${nome}"]`).forEach((b) => { b.disabled = !si; }); }
   const mentreScrivi = {
+    clientId(el) { S.clientId = el.value; abilita('clientId', ID_VALIDO.test(el.value.trim())); },
     prezzo(el) {
       S.prezzo = el.value;
       if (S.verdetto) { S.verdetto = null; const v = $('#verdetto'); if (v) v.remove(); }
@@ -707,7 +736,7 @@
     if (e.key === 'Escape' && S.pendente) { S.pendente = null; mostraPendente(); return; }
     if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
     const campo = e.target.dataset.campo;
-    const vai = { prezzo: 'chiedi', stipendioArr: 'stipendio', nuovaCat: 'aggiungi-cat' }[campo];
+    const vai = { prezzo: 'chiedi', stipendioArr: 'stipendio', nuovaCat: 'aggiungi-cat', clientId: 'salva-client' }[campo];
     if (vai) {
       e.preventDefault();
       const b = document.querySelector(`[data-act="${vai}"]`);
@@ -744,6 +773,7 @@
       <div class="riga-bottoni">
         <button type="button" class="btn-sec" data-act="prova">Prova collegamento</button>
         <button type="button" class="btn-sec" data-act="esci">Esci da Google</button>
+        <button type="button" class="btn-sec" data-act="cambia-client">Cambia ID client</button>
       </div>`;
   }
 
@@ -782,7 +812,9 @@
     stato: 'ok',
     client: null, attesa: null, timer: null, inCorso: null, ancora: false, gen: 0, sporco: false, utente: null,
 
-    configurato() { return !!String(CFG.GOOGLE_CLIENT_ID || '').trim(); },
+    // L'ID client si inserisce dall'app (resta su questo dispositivo); config.js è solo un'alternativa.
+    idClient() { return String(leggi(K.clientId) || CFG.GOOGLE_CLIENT_ID || '').trim(); },
+    configurato() { return !!this.idClient(); },
     token() {
       try { const t = JSON.parse(leggi(K.token) || 'null'); if (t && t.scade > Date.now() + 60000) return t.valore; } catch (e) { /* niente */ }
       return null;
@@ -795,7 +827,7 @@
       s.onload = () => {
         try {
           this.client = google.accounts.oauth2.initTokenClient({
-            client_id: String(CFG.GOOGLE_CLIENT_ID).trim(),
+            client_id: this.idClient(),
             scope: this.SCOPE,
             callback: (r) => this.risposta(r),
             error_callback: (e) => this.fallito(e)
