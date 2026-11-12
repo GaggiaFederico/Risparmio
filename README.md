@@ -10,7 +10,8 @@ Web app per iPhone che ti dice se puoi permetterti una spesa e ti aiuta a rispar
 - **Mascotte:** un husky in smoking se risparmi, normale se sei nella media, trasandato se esageri.
 - **Riepilogo:** dove va lo stipendio, spese per categoria, sigarette in un anno, piano di accumulo.
 - **Movimenti:** tutte le spese e le mensilità extra mese per mese, divise per giorno. Le cancelli una alla volta o ne selezioni diverse insieme.
-- **Stipendio, PAC, 13ª e 14ª:** registri quando arrivano e il versato del PAC cresce da solo.
+- **Stipendio sempre manuale:** non c'è uno stipendio fisso. Ogni mese lo registri quando arriva, e finché non lo fai l'app te lo chiede in cima a Posso?. Ogni stipendio è un movimento che puoi cancellare.
+- **PAC, 13ª e 14ª:** la rata del PAC si aggiunge al versato a ogni stipendio registrato; le mensilità extra si sommano alle entrate del mese.
 - **Solo Google Drive:** i dati stanno esclusivamente nel file `risparmio-dati.json` sul tuo Drive, mai sul telefono. Ogni modifica viene salvata subito.
 - **Test di collegamento:** all'accesso, e quando vuoi da Impostazioni, controlla passo per passo Google, Drive, il file, la lettura e il salvataggio.
 - **Animazioni:** cifre che scorrono, barre che crescono, ciambella che si disegna, cane che respira e salta quando cambia umore.
@@ -52,7 +53,7 @@ Dopo ogni pagamento l'app si apre e chiede "Che spesa era?".
 
 ## Note
 
-- L'accesso a Google dura un'ora. Quando scade, l'app si blocca con **Ricollega**: così nessuna modifica resta solo sul telefono.
+- **Accesso ricordato:** il telefono ricorda il tuo account Google (non i dati). Google limita l'accesso dei siti a un'ora: quando scade, il tocco successivo ti ricollega da solo, senza password, e poi esegue quello che volevi fare. Riaprendo l'app trovi **Continua come …**.
 - Prima di ogni salvataggio l'app rilegge il file e unisce le spese fatte da altri dispositivi, quindi non se ne perde nessuna.
 - Se avevi usato la versione precedente, le spese rimaste sul telefono vengono portate su Drive al primo accesso.
 - Dopo ogni modifica ai file, aumenta `VERSIONE` in `sw.js` (es. `risparmio-v2`) perché i telefoni scarichino la versione nuova.

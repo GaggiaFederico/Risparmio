@@ -97,6 +97,7 @@ h2 { margin: 0; font-size: 18px; font-weight: 900; }
 .cifra-grande { font-size: 44px; font-weight: 900; letter-spacing: -0.03em; line-height: 1.05; color: var(--verde); white-space: nowrap; }
 .cifra-grande.negativa { color: var(--rosso); }
 .cifra-grande.lunga { font-size: 34px; }
+.cifra-grande.vuota { color: #9A9EB5; }
 
 .griglia2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .griglia3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
@@ -377,6 +378,7 @@ span.test-icona.corso { border: 2.5px solid rgba(79, 70, 229, 0.2); border-top-c
 .test li.ok svg, .test li.ko svg { animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .blocco { align-items: center; z-index: 25; }
 .campo-id { align-self: stretch; }
+.link.centrato { align-self: center; }
 .campo-id input { font-size: 16px; }
 .origine { align-self: stretch; display: flex; flex-direction: column; gap: 6px; text-align: left; }
 .origine-riga { display: flex; align-items: center; gap: 8px; }

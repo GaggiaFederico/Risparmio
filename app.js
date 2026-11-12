@@ -12,7 +12,8 @@
     collegato: 'risparmio.drive.collegato',
     modifiche: 'risparmio.drive.modifiche',
     ultima: 'risparmio.drive.ultima',
-    clientId: 'risparmio.google.clientId'
+    clientId: 'risparmio.google.clientId',
+    account: 'risparmio.google.account'
   };
 
   // ---------- Memoria del telefono ----------
@@ -123,9 +124,14 @@
     totEssenziali(ess) { return this.totale((s) => { const c = this.cat(s.categoriaID); return c ? c.essenziale === ess : !ess; }); },
     totCategoria(id) { return this.totale((s) => s.categoriaID === id); },
     speso() { return this.totale(() => true); },
-    extraMese() { return D.extra.filter((e) => stessoMese(e.data)).reduce((a, e) => a + e.importo, 0); },
-    extraAnno() { return D.extra.filter((e) => stessoAnno(e.data)).reduce((a, e) => a + e.importo, 0); },
-    entrate() { return D.stipendio + this.extraMese(); },
+    // Lo stipendio conta solo se lo registri tu, mese per mese.
+    stipendiMese() { return D.extra.filter((e) => e.tipo === 'stipendio' && stessoMese(e.data)).reduce((a, e) => a + e.importo, 0); },
+    extraMese() { return D.extra.filter((e) => e.tipo !== 'stipendio' && stessoMese(e.data)).reduce((a, e) => a + e.importo, 0); },
+    extraAnno() { return D.extra.filter((e) => e.tipo !== 'stipendio' && stessoAnno(e.data)).reduce((a, e) => a + e.importo, 0); },
+    entrate() { return this.stipendiMese() + this.extraMese(); },
+    // Versato nel PAC: quanto avevi già, più la rata di ogni stipendio registrato.
+    versatoPac() { return D.pacTotale + D.extra.filter((e) => e.tipo === 'stipendio').reduce((a, e) => a + (Number(e.pac) || 0), 0); },
+    ultimoStipendio() { const s = D.extra.filter((e) => e.tipo === 'stipendio').sort((a, b) => b.data - a.data)[0]; return s ? s.importo : 0; },
     risparmio() { return this.entrate() * 0.2; },
     // La rata del PAC conta già come risparmio.
     protetto() { return Math.max(this.risparmio(), D.pac); },
@@ -133,7 +139,7 @@
     sfiziMax() { return Math.max(0, Math.min(this.entrate() * 0.3, this.entrate() * 0.8 - D.speseFisse - this.totEssenziali(true))); },
     // Quanto potresti aver speso in sfizi a oggi (almeno una settimana di budget).
     sfiziAOggi() { const { g, tot } = giorniMese(); return this.sfiziMax() * Math.max(g, 7) / tot; },
-    usato() { const b = this.entrate() - D.speseFisse - this.protetto(); return b > 0 ? Math.min(1, this.speso() / b) : (this.speso() > 0 ? 1 : 0); },
+    usato() { if (this.entrate() <= 0) return 0; const b = this.entrate() - D.speseFisse - this.protetto(); return b > 0 ? Math.min(1, this.speso() / b) : (this.speso() > 0 ? 1 : 0); },
     // 2 = elegante, 1 = normale, 0 = trasandato
     umore() {
       if (this.entrate() <= 0) return 1;
@@ -145,6 +151,7 @@
     valuta(importo, c) {
       const disp = this.disponibile();
       const no = (motivo) => ({ ok: false, titolo: 'No, lascia stare', motivo });
+      if (this.entrate() <= 0 && !c.essenziale) return { ok: false, titolo: 'Aspetta lo stipendio', motivo: 'Registra prima lo stipendio di questo mese: senza, non so quanto puoi spendere.' };
       if (c.essenziale) {
         return importo <= disp
           ? { ok: true, titolo: 'Sì, puoi', motivo: 'È una spesa essenziale.' }
@@ -187,21 +194,31 @@
     const foto = ['cane_trasandato', 'cane_normale', 'cane_elegante'][u];
     const alt = ['Husky trasandato: stai spendendo troppo', 'Husky: tutto nella norma', 'Husky in smoking: stai risparmiando alla grande'][u];
     const frase = C.entrate() <= 0
-      ? 'Inserisci stipendio e spese fisse nelle Impostazioni per iniziare.'
+      ? 'Registra lo stipendio di questo mese per sapere cosa puoi spendere.'
       : [`Stai spendendo troppo: hai usato il ${pct}% del budget del mese.`,
          `Tutto nella norma: hai usato il ${pct}% del budget del mese.`,
          `Stai risparmiando alla grande: hai usato solo il ${pct}% del budget.`][u];
-    const testoDisp = eur(disp);
+    const senzaStipendio = C.entrate() <= 0;
+    const testoDisp = senzaStipendio ? '—' : eur(disp);
     const v = S.verdetto;
     const pronto = parseEuro(S.prezzo) > 0 && C.cat(S.catId);
     S.umorePrec = u;
 
+    const chiediStipendio = C.stipendiMese() <= 0 ? `<section class="vetro stipendio-mese" aria-labelledby="t-stip-mese">
+        <h2 id="t-stip-mese">È arrivato lo stipendio di ${mese.toLowerCase()}?</h2>
+        <label class="campo"><span class="nome-campo">Importo</span>
+          <input type="text" inputmode="decimal" autocomplete="off" placeholder="${esc(numero(C.ultimoStipendio()) || '0')}" value="${esc(S.stipendioArr)}" data-campo="stipendioArr" aria-label="Importo dello stipendio arrivato"><span class="euro">€</span>
+        </label>
+        <button type="button" class="btn" data-act="stipendio" data-pulsante="stipendio"${parseEuro(S.stipendioArr) > 0 ? '' : ' disabled'}>Registra stipendio</button>
+      </section>` : '';
+
     return `${testata(`${mese} · giorno ${g} di ${tot}`, 'Posso?')}
+      ${chiediStipendio}
       <section class="vetro saldo" aria-label="Saldo del mese">
         <img class="cane${S.umorePrec !== undefined && S.umorePrec !== u ? ' cambia' : ''}" src="img/${foto}.png" alt="${alt}">
         <div class="disponibile">
           <span class="etichetta-piccola">Disponibile</span>
-          <span class="cifra-grande${disp < 0 ? ' negativa' : ''}${testoDisp.length > 8 ? ' lunga' : ''}" data-conta="disp" data-valore="${disp}">${testoDisp}</span>
+          ${senzaStipendio ? `<span class="cifra-grande vuota">${testoDisp}</span>` : `<span class="cifra-grande${disp < 0 ? ' negativa' : ''}${testoDisp.length > 8 ? ' lunga' : ''}" data-conta="disp" data-valore="${disp}">${testoDisp}</span>`}
         </div>
         <div class="griglia2">
           <div class="mini"><span>Speso</span><strong data-conta="speso" data-valore="${C.speso()}">${eur(C.speso())}</strong></div>
@@ -293,7 +310,7 @@
         <h2 id="t-pac">Piano di accumulo</h2>
         <div class="griglia3">
           <div class="mini"><span>Rata mensile</span><strong>${eur(D.pac)}</strong></div>
-          <div class="mini"><span>Versato finora</span><strong style="color: var(--verde)" data-conta="versato" data-valore="${D.pacTotale}">${eur(D.pacTotale)}</strong></div>
+          <div class="mini"><span>Versato finora</span><strong style="color: var(--verde)" data-conta="versato" data-valore="${C.versatoPac()}">${eur(C.versatoPac())}</strong></div>
           <div class="mini"><span>13ª e 14ª</span><strong>${eur(C.extraAnno())}</strong></div>
         </div>
       </section>
@@ -313,7 +330,10 @@
       const c = C.cat(s.categoriaID);
       return { id: s.id, tipo: 'spesa', data: s.data, importo: s.importo, titolo: c ? c.nome : 'Senza categoria', nota: s.nota || '' };
     });
-    const extra = D.extra.filter((e) => nelMese(e.data)).map((e) => ({ id: e.id, tipo: 'entrata', data: e.data, importo: e.importo, titolo: e.nome, nota: 'Mensilità extra' }));
+    const extra = D.extra.filter((e) => nelMese(e.data)).map((e) => ({
+      id: e.id, tipo: 'entrata', data: e.data, importo: e.importo, titolo: e.nome,
+      nota: e.tipo === 'stipendio' ? (e.pac > 0 ? `Stipendio · PAC +${eur(e.pac)}` : 'Stipendio') : 'Mensilità extra'
+    }));
     return { rif, voci: spese.concat(extra).sort((a, b) => b.data - a.data) };
   }
 
@@ -343,7 +363,7 @@
         </div>
         <div class="griglia2">
           <div class="mini"><span>Uscite</span><strong data-conta="mov-uscite" data-valore="${uscite}">${eur(uscite)}</strong></div>
-          <div class="mini"><span>Entrate extra</span><strong style="color: var(--verde)" data-conta="mov-entrate" data-valore="${entrate}">${eur(entrate)}</strong></div>
+          <div class="mini"><span>Entrate</span><strong style="color: var(--verde)" data-conta="mov-entrate" data-valore="${entrate}">${eur(entrate)}</strong></div>
         </div>
       </section>
 
@@ -352,7 +372,7 @@
           <h2 id="t-mov">${voci.length} ${voci.length === 1 ? 'movimento' : 'movimenti'}</h2>
           ${voci.length ? `<button type="button" class="link" data-act="seleziona">${sel ? 'Fine' : 'Seleziona'}</button>` : ''}
         </div>
-        <div class="pillole" role="group" aria-label="Mostra">${filtro('tutti', 'Tutti')}${filtro('spese', 'Spese')}${filtro('entrate', 'Entrate extra')}</div>
+        <div class="pillole" role="group" aria-label="Mostra">${filtro('tutti', 'Tutti')}${filtro('spese', 'Spese')}${filtro('entrate', 'Entrate')}</div>
         ${sel && voci.length ? `<div class="barra-selezione">
           <button type="button" class="link" data-act="seleziona-tutti">${nSel === voci.length ? 'Deseleziona tutti' : 'Seleziona tutti'}</button>
           <button type="button" class="btn-pericolo" data-act="elimina-selezionati" data-pulsante="selezionati"${nSel ? '' : ' disabled'}>Elimina <span data-conta-sel>${nSel}</span></button>
@@ -370,7 +390,8 @@
   }
 
   function viewImpostazioni() {
-    const extraAnno = D.extra.filter((e) => stessoAnno(e.data)).sort((a, b) => b.data - a.data);
+    const extraAnno = D.extra.filter((e) => e.tipo !== 'stipendio' && stessoAnno(e.data)).sort((a, b) => b.data - a.data);
+    const stipendiMese = D.extra.filter((e) => e.tipo === 'stipendio' && stessoMese(e.data)).sort((a, b) => b.data - a.data);
     const giorno = new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short' });
     const campoEuro = (nome, campo, valore, extraAttr) => `<label class="campo piccolo"><span class="nome-campo">${nome}</span>
       <input type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${esc(valore)}" data-campo="${campo}" ${extraAttr || ''}><span class="euro">€</span></label>`;
@@ -379,18 +400,20 @@
       <section class="vetro" aria-labelledby="t-arrivato">
         <h2 id="t-arrivato">È arrivato lo stipendio?</h2>
         <label class="campo"><span class="nome-campo">Importo</span>
-          <input type="text" inputmode="decimal" autocomplete="off" placeholder="${esc(numero(D.stipendio) || '0')}" value="${esc(S.stipendioArr)}" data-campo="stipendioArr" aria-label="Importo dello stipendio arrivato"><span class="euro">€</span>
+          <input type="text" inputmode="decimal" autocomplete="off" placeholder="${esc(numero(C.ultimoStipendio()) || '0')}" value="${esc(S.stipendioArr)}" data-campo="stipendioArr" aria-label="Importo dello stipendio arrivato"><span class="euro">€</span>
         </label>
         <button type="button" class="btn" data-act="stipendio" data-pulsante="stipendio"${parseEuro(S.stipendioArr) > 0 ? '' : ' disabled'}>Registra stipendio</button>
-        <p class="nota">${D.pac > 0 ? `La rata del PAC, ${eur(D.pac)}, si aggiunge da sola al versato.` : 'Imposta qui sotto la rata del PAC, se ne hai uno.'}</p>
+        <p class="nota">${stipendiMese.length
+          ? `Questo mese hai registrato ${stipendiMese.map((e) => `${eur(e.importo)} il ${giorno.format(new Date(e.data))}`).join(' e ')}. Per correggerlo, cancellalo da Movimenti.`
+          : 'Lo stipendio non è fisso: registralo ogni mese quando arriva.'}${D.pac > 0 ? ` La rata del PAC, ${eur(D.pac)}, si aggiunge da sola al versato.` : ''}</p>
       </section>
 
       <section class="vetro" aria-labelledby="t-fisse">
-        <h2 id="t-fisse">Entrate e spese fisse</h2>
-        ${campoEuro('Stipendio mensile', 'stipendio', numero(D.stipendio))}
+        <h2 id="t-fisse">Spese fisse e PAC</h2>
         ${campoEuro('Spese fisse', 'speseFisse', numero(D.speseFisse))}
         ${campoEuro('Rata fissa PAC', 'pac', numero(D.pac))}
-        <p class="nota">Spese fisse: affitto, bollette, abbonamenti. L'app mette da parte il 20% delle entrate, o la rata del PAC se è più alta.</p>
+        ${campoEuro('PAC già versato', 'pacBase', numero(D.pacTotale))}
+        <p class="nota">Spese fisse: affitto, bollette, abbonamenti. L'app mette da parte il 20% delle entrate, o la rata del PAC se è più alta. "PAC già versato" è quanto avevi prima di usare l'app.</p>
       </section>
 
       <section class="vetro" aria-labelledby="t-extra">
@@ -454,6 +477,7 @@
   function viewIngresso() {
     const f = S.fase;
     let corpo;
+    const acc = Drive.account();
     if (f === 'config') {
       const valido = ID_VALIDO.test(S.clientId.trim());
       corpo = `<p class="nota">Per iniziare collega l'app al tuo progetto Google: incolla qui l'ID client OAuth. Finisce con .apps.googleusercontent.com.</p>
@@ -467,9 +491,10 @@
         <p class="nota">L'ID resta solo su questo dispositivo: non serve metterlo nel codice pubblicato.</p>`;
     } else {
       const bottone = f === 'carico' ? ''
-        : `<button type="button" class="btn" data-act="accedi"${Drive.client ? '' : ' disabled'}>${Drive.client ? 'Accedi con Google' : 'Preparo Google…'}</button>`;
-      corpo = `<p class="nota">I tuoi dati sono salvati solo nel tuo Google Drive, nel file ${Drive.NOME}. Niente resta sul telefono, così non si perdono.</p>
+        : `<button type="button" class="btn" data-act="accedi"${Drive.client ? '' : ' disabled'}>${!Drive.client ? 'Preparo Google…' : (acc ? `Continua come ${esc(acc)}` : 'Accedi con Google')}</button>`;
+      corpo = `<p class="nota">${acc ? 'Bentornato! Il tuo account è ricordato su questo telefono: tocca per continuare, senza password.' : `I tuoi dati sono salvati solo nel tuo Google Drive, nel file ${Drive.NOME}. Niente resta sul telefono, così non si perdono.`}</p>
         ${bottone}
+        ${acc && f !== 'carico' ? '<button type="button" class="link centrato" data-act="altro-account">Usa un altro account</button>' : ''}
         <div data-test-lista>${listaTest()}</div>
         ${f === 'errore' && Drive.token() ? '<button type="button" class="btn-sec" data-act="riprova">Riprova il collegamento</button>' : ''}`;
     }
@@ -641,8 +666,7 @@
     stipendio() {
       const v = parseEuro(S.stipendioArr);
       if (!(v > 0)) return;
-      D.stipendio = v;
-      D.pacTotale += D.pac;
+      D.extra.push({ id: uid(), tipo: 'stipendio', nome: 'Stipendio', importo: v, pac: D.pac, data: Date.now() });
       S.stipendioArr = '';
       salva(); render();
       toast(D.pac > 0 ? `Stipendio registrato · PAC +${eur(D.pac)}` : 'Stipendio registrato');
@@ -705,6 +729,9 @@
       });
     },
     riprova() { apri(); },
+    'altro-account'() {
+      Drive.accedi(true).then(apri).catch(() => toast('Accesso a Google non riuscito'));
+    },
     ricollega() {
       Drive.accedi().then(() => {
         mostraBlocco();
@@ -788,7 +815,7 @@
       document.querySelectorAll('[data-conta-sel]').forEach((x) => { x.textContent = n; });
       abilita('selezionati', n > 0);
     },
-    stipendio(el) { const v = parseEuro(el.value); D.stipendio = v > 0 ? v : 0; el.value = numero(D.stipendio); salva(); },
+    pacBase(el) { const v = parseEuro(el.value); D.pacTotale = v > 0 ? v : 0; el.value = numero(D.pacTotale); salva(); },
     speseFisse(el) { const v = parseEuro(el.value); D.speseFisse = v > 0 ? v : 0; el.value = numero(D.speseFisse); salva(); },
     pac(el) { const v = parseEuro(el.value); D.pac = v > 0 ? v : 0; el.value = numero(D.pac); salva(); },
     limite(el) {
@@ -811,7 +838,7 @@
   // Le azioni che cambiano i dati partono solo con l'accesso a Google valido,
   // così ogni modifica arriva davvero su Drive.
   const MODIFICANO = new Set(['registra', 'elimina-spesa', 'elimina-mov', 'elimina-selezionati', 'stipendio', 'extra', 'elimina-extra', 'essenziale', 'elimina-cat', 'aggiungi-cat', 'pendente-cat',
-    'stipendio-campo', 'speseFisse', 'pac', 'limite', 'importa']);
+    'speseFisse', 'pac', 'pacBase', 'limite', 'importa']);
   function puoModificare() {
     if (S.fase !== 'pronto') return false;
     if (Drive.token()) return true;
@@ -825,6 +852,17 @@
     if (!el || el.disabled) return;
     const f = azioni[el.dataset.act];
     if (!f) return;
+    if (MODIFICANO.has(el.dataset.act) && S.fase === 'pronto' && !Drive.token()) {
+      // Accesso scaduto: lo rinnova con questo stesso tocco e poi fa quello che volevi.
+      if (!Drive.client) { puoModificare(); return; }
+      Drive.accedi().then(() => {
+        Drive.imposta(Drive.sporco ? 'salvo' : 'ok');
+        mostraBlocco();
+        f(el, el.dataset.id, e);
+        if (Drive.sporco) Drive.salvaOra();
+      }).catch(() => { Drive.imposta('scaduto'); mostraBlocco(); });
+      return;
+    }
     if (MODIFICANO.has(el.dataset.act) && !puoModificare()) return;
     f(el, el.dataset.id, e);
   });
@@ -833,7 +871,7 @@
     const campo = e.target.dataset.campo;
     const f = aFineCampo[campo];
     if (!f) return;
-    if (MODIFICANO.has(campo === 'stipendio' ? 'stipendio-campo' : campo) && !puoModificare()) {
+    if (MODIFICANO.has(campo) && !puoModificare()) {
       if (campo === 'importa') e.target.value = '';
       return;
     }
@@ -891,9 +929,9 @@
     if (!b.hidden) return;
     b.hidden = false;
     b.innerHTML = `<div class="foglio vetro" role="alertdialog" aria-modal="true" aria-labelledby="t-blocco" aria-describedby="d-blocco">
-      <h2 id="t-blocco">Ricollega Google Drive</h2>
-      <p class="nota" id="d-blocco">${Drive.sporco ? '<strong>Hai modifiche non ancora salvate.</strong> ' : ''}L'accesso a Google dura un'ora. Ricollegati per continuare: ogni modifica finisce subito su Drive.</p>
-      <button type="button" class="btn" data-act="ricollega">Ricollega</button>
+      <h2 id="t-blocco">Conferma l'accesso a Google</h2>
+      <p class="nota" id="d-blocco">${Drive.sporco ? '<strong>Hai modifiche non ancora salvate.</strong> ' : ''}Google chiede di confermare l'accesso ogni ora. Il tuo account è ricordato: basta un tocco, senza password.</p>
+      <button type="button" class="btn" data-act="ricollega">${Drive.account() ? `Continua come ${esc(Drive.account())}` : 'Continua'}</button>
     </div>`;
     const btn = b.querySelector('button');
     if (btn) btn.focus();
@@ -949,11 +987,15 @@
       document.head.appendChild(s);
     },
     // Va chiamata direttamente dal tocco, altrimenti il browser blocca la finestra di Google.
-    accedi() {
+    // L'account resta ricordato sul telefono: Google riconosce subito chi sei, senza password.
+    account() { return leggi(K.collegato) === '1' ? (leggi(K.account) || '') : ''; },
+    accedi(altro) {
       return new Promise((ok, ko) => {
         if (!this.client) { ko(new Error('nonpronto')); return; }
         this.attesa = { ok, ko };
-        this.client.requestAccessToken({ prompt: leggi(K.collegato) === '1' ? '' : 'consent' });
+        const conf = { prompt: altro ? 'select_account' : (leggi(K.collegato) === '1' ? '' : 'consent') };
+        if (!altro && this.account()) conf.login_hint = this.account();
+        this.client.requestAccessToken(conf);
       });
     },
     risposta(r) {
@@ -971,7 +1013,7 @@
     esci() {
       const t = this.token();
       try { if (t && window.google && google.accounts) google.accounts.oauth2.revoke(t, () => {}); } catch (e) { /* niente */ }
-      [K.token, K.collegato, K.file, K.ultima].forEach((k) => scrivi(k, null));
+      [K.token, K.collegato, K.file, K.ultima, K.account].forEach((k) => scrivi(k, null));
       clearTimeout(this.timer);
       this.sporco = false; this.utente = null; this.stato = 'ok';
     },
@@ -992,6 +1034,7 @@
       if (!r.ok) throw new ErroreDrive('http', r.status);
       const j = await r.json();
       this.utente = j.user || null;
+      if (this.utente && this.utente.emailAddress) scrivi(K.account, this.utente.emailAddress);
       return this.utente;
     },
     async trova() {
